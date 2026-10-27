@@ -3,11 +3,35 @@ package gen
 import (
 	"errors"
 	"fmt"
+	"go/token"
 	"go/types"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/go-kanna/internal/packages"
+	"github.com/go-kanna/internal/scan"
 )
+
+// Targets finds the targets in pkgs, naming each, with " (hook)" after the name
+// of one that has a hook, and spelling each diagnostic as diag.Diag.String
+// does.
+func Targets(fset *token.FileSet, pkgs []*packages.Package) ([]string, []string) {
+	found, diags := targets(fset, scan.Structs(pkgs))
+
+	names := make([]string, len(found))
+	for i, t := range found {
+		names[i] = t.Name
+		if t.hook {
+			names[i] += " (hook)"
+		}
+	}
+	msgs := make([]string, len(diags))
+	for i, d := range diags {
+		msgs[i] = d.String()
+	}
+	return names, msgs
+}
 
 // Sibling is another field of the struct, for eqfield to name.
 type Sibling = sibling
