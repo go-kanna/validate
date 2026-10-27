@@ -178,7 +178,7 @@ func TestDecodeJSON_KeepsDecoding(t *testing.T) {
 
 type mailbox struct {
 	Email       email `json:"email"`
-	EmailBackup email `json:"emailBackup"`
+	EmailBackup email `json:"email_backup"`
 }
 
 // Validate stands in for `validate:"required"` on both.
@@ -188,7 +188,7 @@ func (m mailbox) Validate() error {
 		errs.Add("email", validate.Blank())
 	}
 	if m.EmailBackup.v == "" {
-		errs.Add("emailBackup", validate.Blank())
+		errs.Add("email_backup", validate.Blank())
 	}
 	return errs.Err()
 }
@@ -199,10 +199,10 @@ func TestDecodeJSON_KeepsWhatIsBesideARejection(t *testing.T) {
 	var got mailbox
 	err := validate.DecodeJSON(strings.NewReader(`{"email":"x"}`), &got)
 
-	// emailBackup starts like email but does not lie under it.
+	// email_backup starts like email but does not lie under it.
 	want := validate.Errors{
 		{Field: "email", Err: &typeError{code: "email"}},
-		{Field: "emailBackup", Err: validate.Blank()},
+		{Field: "email_backup", Err: validate.Blank()},
 	}
 	if errs, ok := errors.AsType[validate.Errors](err); !ok || !equalErrors(errs, want) {
 		t.Errorf("DecodeJSON() error = %v, want %v", err, want)

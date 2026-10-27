@@ -22,6 +22,10 @@ linters:
         - fmt.Fprint
         - fmt.Fprintf
         - fmt.Fprintln
+    tagliatelle:
+      case:
+        rules:
+          json: snake # As Rails spells the attributes its errors are keyed by.
     usetesting:
       context-background: true
       context-todo: true
