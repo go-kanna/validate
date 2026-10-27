@@ -26,6 +26,10 @@ linters:
       os-mkdir-temp: true
       os-setenv: true
       os-chdir: true
+    wrapcheck:
+      extra-ignore-sigs:
+        - validate.Errors).Err(                  # hands back what Validate collected; nothing underneath to wrap
+        - ) *github.com/go-kanna/validate.Error  # makes the error rather than passing one on
   enable:
     - gomodguard_v2
   disable:
