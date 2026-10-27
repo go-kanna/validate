@@ -33,6 +33,67 @@ func Targets(fset *token.FileSet, pkgs []*packages.Package) ([]string, []string)
 	return names, msgs
 }
 
+// Plans plans the targets in pkgs, all of whose output the run rewrites. It
+// spells the plan of each struct, by name, as a line per field, such as
+// `Name(name): required=="" runes<=50`, and each diagnostic as diag.Diag.String
+// does.
+func Plans(fset *token.FileSet, pkgs []*packages.Package) (map[string][]string, []string) {
+	found, diags := targets(fset, scan.Structs(pkgs))
+	rewritten := make(map[string]bool, len(pkgs))
+	for _, pkg := range pkgs {
+		rewritten[pkg.PkgPath] = true
+	}
+	planned, ds := plans(fset, found, rewritten)
+	diags = append(diags, ds...)
+
+	spelled := make(map[string][]string, len(planned))
+	for _, p := range planned {
+		lines := []string{}
+		for _, f := range p.fields {
+			path := f.path
+			if f.flatten {
+				path += ",flatten"
+			}
+			lines = append(lines, f.name+"("+path+"): "+describeValue(f.value))
+		}
+		spelled[p.Name] = lines
+	}
+	msgs := make([]string, len(diags))
+	for i, d := range diags {
+		msgs[i] = d.String()
+	}
+	return spelled, msgs
+}
+
+var zeroSpellings = map[zeroTest]string{
+	zeroString: `""`, zeroNumber: "0", zeroBool: "false", zeroNil: "nil", zeroMethod: "IsZero", zeroComposite: "{}",
+}
+
+// describeValue spells v out on one line, such as `required=="" len>=3 nest`,
+// with what a pointer points to in *{...} and each element in []{...}.
+func describeValue(v *value) string {
+	var parts []string
+	if v.required {
+		parts = append(parts, "required=="+zeroSpellings[v.zero])
+	}
+	if v.omitEmpty {
+		parts = append(parts, "omitempty=="+zeroSpellings[v.zero])
+	}
+	for _, c := range v.checks {
+		parts = append(parts, describe(c))
+	}
+	if v.nest {
+		parts = append(parts, "nest")
+	}
+	if v.pointee != nil {
+		parts = append(parts, "*{"+describeValue(v.pointee)+"}")
+	}
+	if v.elem != nil {
+		parts = append(parts, "[]{"+describeValue(v.elem)+"}")
+	}
+	return strings.Join(parts, " ")
+}
+
 // Sibling is another field of the struct, for eqfield to name.
 type Sibling = sibling
 
