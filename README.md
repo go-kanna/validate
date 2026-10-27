@@ -245,8 +245,17 @@ kanna-validate [flags] [packages]
 | `-version`      | print the version                                                                            |
 
 The packages default to the one in the current directory, so `//go:generate go tool kanna-validate` needs no argument.
-A run that succeeds prints nothing. A package whose structs have all lost `//kanna:validate` has its `validate_gen.go`
-removed; a file of that name without the generated-code header is never touched.
+A run that succeeds prints nothing but its warnings. One of them is about the run itself: when no struct in its packages
+is marked `//kanna:validate`, it succeeds, since a `//go:generate` line left behind does no harm, but says so, since the
+line was most likely meant to go as well:
+
+```console
+$ go generate
+warning: no struct is marked //kanna:validate in .
+```
+
+A package whose structs have all lost `//kanna:validate` has its `validate_gen.go` removed; a file of that name without
+the generated-code header is never touched.
 
 ## Example
 
