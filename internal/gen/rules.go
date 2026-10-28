@@ -82,9 +82,8 @@ type site struct {
 	// without a qualifier.
 	pkg *types.Package
 
-	// scope is the scope of the file declaring the struct, which rule= names a
-	// type in as Go would there.
-	scope *types.Scope
+	// refs is where a qualified rule= looks for its package.
+	refs refScope
 
 	// fields are the struct's other fields, for eqfield. They are nil below
 	// the field's own level, where eqfield has no field to compare with.
@@ -451,61 +450,56 @@ func cannotApply(r rule, t types.Type, at site) *ruleError {
 	return ruleErrorf("rule %q cannot apply to %s", r.name, at.typeString(t))
 }
 
-// lookupType finds the type that name, as rule= writes it, denotes in the file
-// declaring the struct: Type, or pkg.Type for a package the file imports.
-func (at site) lookupType(name string) (*types.TypeName, error) {
-	qual, sel, qualified := strings.Cut(name, ".")
-	if !token.IsIdentifier(qual) || qualified && !token.IsIdentifier(sel) {
-		return nil, ruleErrorf("rule=%s: not a type name, as in rule=Type or rule=pkg.Type", name)
+// lookupType finds the type that ref, as rule= writes it, names: Type of the
+// struct's package, or pkg.Type of a package at.refs holds.
+func (at site) lookupType(ref string) (*types.TypeName, error) {
+	qual, name, ok := splitRef(ref)
+	if !ok {
+		return nil, ruleErrorf("rule=%s: not a type name, as in rule=Type or rule=pkg.Type", ref)
 	}
-
-	var (
-		obj        types.Object
-		candidates []string
-	)
-	if qualified {
-		pkgName, ok := at.scope.Lookup(qual).(*types.PkgName)
-		if !ok {
-			err := ruleErrorf("rule=%s: this file does not import %s", name, qual)
-			if s, ok := suggest.Closest(qual, namesOf[*types.PkgName](at.scope)); ok {
-				err.hint = fmt.Sprintf("did you mean %q?", s)
-			}
+	pkg, prefix := at.pkg, ""
+	if qual != "" {
+		var err error
+		if pkg, err = at.refs.pick(ref, qual); err != nil {
 			return nil, err
 		}
-		scope := pkgName.Imported().Scope()
-		if o := scope.Lookup(sel); o != nil && o.Exported() {
-			obj = o
+		if pkg.Path() == at.pkg.Path() {
+			pkg = at.pkg
 		}
-		for _, n := range namesOf[*types.TypeName](scope) {
-			if token.IsExported(n) {
-				candidates = append(candidates, qual+"."+n)
-			}
-		}
-	} else {
-		_, obj = at.scope.LookupParent(name, token.NoPos)
-		candidates = namesOf[*types.TypeName](at.pkg.Scope())
+		prefix = qual + "."
 	}
 
-	if obj == nil {
-		err := ruleErrorf("rule=%s: no such type", name)
-		if s, ok := suggest.Closest(name, candidates); ok {
+	obj := pkg.Scope().Lookup(name)
+	if obj == nil || pkg != at.pkg && !obj.Exported() {
+		err := ruleErrorf("rule=%s: no such type", ref)
+		var candidates []string
+		for _, n := range typeNames(pkg.Scope()) {
+			if pkg == at.pkg || token.IsExported(n) {
+				candidates = append(candidates, prefix+n)
+			}
+		}
+		if s, ok := suggest.Closest(ref, candidates); ok {
 			err.hint = fmt.Sprintf("did you mean %q?", s)
 		}
 		return nil, err
 	}
 	tn, ok := obj.(*types.TypeName)
 	if !ok {
-		return nil, ruleErrorf("rule=%s: not a type", name)
+		return nil, ruleErrorf("rule=%s: not a type", ref)
+	}
+	if pkg != at.pkg && slices.ContainsFunc(reachable(pkg.Imports()...), func(p *types.Package) bool {
+		return p.Path() == at.pkg.Path()
+	}) {
+		return nil, ruleErrorf("rule=%s would import %s, which imports %s: an import cycle", ref, pkg.Name(), at.pkg.Name())
 	}
 	return tn, nil
 }
 
-// namesOf returns, sorted, the names in scope of the objects of type T, such as
-// the types it declares.
-func namesOf[T types.Object](scope *types.Scope) []string {
+// typeNames returns, sorted, the names of the types declared in scope.
+func typeNames(scope *types.Scope) []string {
 	var names []string
 	for _, n := range scope.Names() {
-		if _, ok := scope.Lookup(n).(T); ok {
+		if _, ok := scope.Lookup(n).(*types.TypeName); ok {
 			names = append(names, n)
 		}
 	}

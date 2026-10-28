@@ -139,10 +139,12 @@ Where it differs from go-playground:
 - `omitempty` comes first among the rules of its level.
 
 `rule=Type` applies a rule of your own: a type with a method `Validate(T) error` that the field's value, or each element
-after `dive`, can be passed to, such as a rule written for [go-kanna/validated](#with-go-kannavalidated). `Type` is
-named as Go code in the struct's file would name it: a type of the struct's package, or `pkg.Type` of a package that
-file imports. The generated code calls `Validate` on the zero value of `Type` and records what it returns at the field,
-with the code and params the rule gave it.
+after `dive`, can be passed to, such as a rule written for [go-kanna/validated](#with-go-kannavalidated). A bare `Type`
+is one of the struct's package. `pkg.Type` names the package by its name, among the packages of your module and those
+the struct's package imports, directly or not; `a/pkg.Type`, with as much of the import path as it takes, tells two
+packages of one name apart. The struct's file need not import it, since the generated file does. The generated code
+calls `Validate` on the zero value of `Type` and records what it returns at the field, with the code and params the
+rule gave it.
 
 ## Nesting and hooks
 

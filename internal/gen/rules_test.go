@@ -12,7 +12,12 @@ import (
 
 const rulesSrc = `package test
 
-import "time"
+import (
+	"time"
+
+	_ "html/template"
+	_ "text/template"
+)
 
 type Role string
 
@@ -121,6 +126,7 @@ func TestResolveRule(t *testing.T) {
 		{rule: "url", field: "Kind", want: "rules.URL"},
 		{rule: "uuid", field: "S", want: "rules.UUID"},
 		{rule: "rule=Past", field: "When", want: "rule=test.Past"},
+		{rule: "rule=test.Past", field: "When", want: "rule=test.Past"},
 		{rule: "rule=Even", field: "I", want: "rule=test.Even"},
 		{rule: "rule=Anything", field: "Sl", want: "rule=test.Anything"},
 		{rule: "rule=IntsWithin", field: "I", want: "rule=test.IntsWithin"},
@@ -190,16 +196,30 @@ func TestResolveRule_Errors(t *testing.T) {
 		{rule: "url", field: "When", wantErr: `rule "url" cannot apply to time.Time`},
 		{rule: "rule", field: "When", wantErr: `rule "rule" needs a value, as in rule=…`},
 		{rule: "rule=*Past", field: "When", wantErr: "rule=*Past: not a type name, as in rule=Type or rule=pkg.Type"},
-		{rule: "rule=time.Time.Day", field: "When", wantErr: "rule=time.Time.Day: not a type name"},
+		{rule: "rule=time.", field: "When", wantErr: "rule=time.: not a type name"},
+		{rule: "rule=/time.Time", field: "When", wantErr: "rule=/time.Time: not a type name"},
 		{rule: "rule=Pst", field: "When", wantErr: "rule=Pst: no such type", wantHint: `did you mean "Past"?`},
 		{rule: "rule=Nothing", field: "When", wantErr: "rule=Nothing: no such type"},
+		// A bare name is a type of the struct's own package.
+		{rule: "rule=string", field: "S", wantErr: "rule=string: no such type"},
 		{
 			rule: "rule=tme.Time", field: "When",
-			wantErr: "rule=tme.Time: this file does not import tme", wantHint: `did you mean "time"?`,
+			wantErr:  "rule=tme.Time: no package tme in your module or among what the struct's package imports",
+			wantHint: `did you mean "time"?`,
 		},
 		{rule: "rule=time.Tme", field: "When", wantErr: "rule=time.Tme: no such type", wantHint: `did you mean "time.Time"?`},
 		{rule: "rule=time.Now", field: "When", wantErr: "rule=time.Now: not a type"},
-		{rule: "rule=time", field: "When", wantErr: "rule=time: not a type"},
+		{
+			rule: "rule=template.Template", field: "S",
+			wantErr:  "rule=template.Template: template could be any of html/template, text/template",
+			wantHint: "write as much of the import path as it takes to tell them apart",
+		},
+		{
+			rule: "rule=html/template.Templat", field: "S",
+			wantErr: "rule=html/template.Templat: no such type", wantHint: `did you mean "html/template.Template"?`,
+		},
+		// The path tells the two apart, and the one named has no such method.
+		{rule: "rule=text/template.Template", field: "S", wantErr: "rule=text/template.Template has no method"},
 		{rule: "rule=Within", field: "I", wantErr: "rule=Within: a generic type needs type arguments"},
 		{rule: "rule=Checker", field: "S", wantErr: "rule=Checker: an interface cannot be a rule"},
 		{rule: "rule=time.Time", field: "When", wantErr: "rule=time.Time has no method Validate(time.Time) error"},
