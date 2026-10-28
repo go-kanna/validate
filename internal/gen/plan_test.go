@@ -52,6 +52,8 @@ type Request struct {
 	Picks    *[]string        ` + "`json:\"picks\" validate:\"dive,required\"`" + `
 	Checked  Checked          ` + "`json:\"checked\"`" + `
 	Tree     Tree             ` + "`json:\"tree\"`" + `
+	Done     *time.Time       ` + "`json:\"done\" validate:\"rule=Past\"`" + `
+	Shifts   []time.Time      ` + "`json:\"shifts\" validate:\"dive,rule=Past\"`" + `
 	Ignored  string           ` + "`json:\"ignored\"`" + `
 	Audit
 }
@@ -75,6 +77,11 @@ func (Checked) Validate(strict bool) error { return nil }
 
 // Tree contains itself, and nothing in it validates itself.
 type Tree map[string]Tree
+
+// Past is a rule as go-kanna/validated writes one.
+type Past struct{}
+
+func (Past) Validate(t time.Time) error { return nil }
 
 //kanna:validate
 type Audit struct {
@@ -114,6 +121,8 @@ func TestPlans(t *testing.T) {
 			`Grid(grid): []{nest}`,
 			`Matrix(matrix): []{[]{>=0}}`,
 			`Picks(picks): *{[]{required==""}}`,
+			`Done(done): *{rule=test.Past}`,
+			`Shifts(shifts): []{rule=test.Past}`,
 			`Audit(Audit,flatten): nest`,
 		},
 		"Address": {`Zip(zip): required=="" pattern(^\d{3}-\d{4}$)`},
@@ -207,6 +216,11 @@ func TestPlans_Errors(t *testing.T) {
 			name:  "eqfield after dive",
 			field: "Tags []string `validate:\"dive,eqfield=Other\"`\n\tOther string",
 			want:  "eqfield applies to the field itself, not to the elements after dive (field Tags)",
+		},
+		{
+			name:  "rule after dive",
+			field: "Tags []string `validate:\"dive,rule=Tag\"`",
+			want:  "rule=Tag: no such type (field Tags)",
 		},
 	}
 

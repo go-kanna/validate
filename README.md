@@ -122,6 +122,7 @@ The tags are go-playground/validator's; the codes and params are those of Rails'
 | `eqfield=Field`                      | a field of the same type              | `confirmation`                                                             | `attribute`: the other's JSON name |
 | `pattern=regexp`                     | strings                               | `invalid`                                                                  |                                    |
 | `email`, `url`, `uuid`               | strings                               | `email`, `url`, `uuid`, from [go-kanna/validated](#with-go-kannavalidated) |                                    |
+| `rule=Type`, `rule=pkg.Type`         | what its `Validate(T) error` takes    | the rule's own                                                             | the rule's own                     |
 | `omitempty`                          | anything with a zero value            | lets the zero value past the rules after it                                |                                    |
 | `dive`                               | slices, arrays, maps                  | applies the rules after it to each element, or each value of a map         |                                    |
 
@@ -136,6 +137,14 @@ Where it differs from go-playground:
 - `pattern=` takes the rest of the tag, commas included, so it comes last. The tag value is a Go string literal, so a
   backslash is written `\\`; a tag that does not unquote stops generation instead of being skipped in silence.
 - `omitempty` comes first among the rules of its level.
+
+`rule=Type` applies a rule of your own: a type with a method `Validate(T) error` that the field's value, or each element
+after `dive`, can be passed to, such as a rule written for [go-kanna/validated](#with-go-kannavalidated). A bare `Type`
+is one of the struct's package. `pkg.Type` names the package by its name, among the packages of your module and those
+the struct's package imports, directly or not; `a/pkg.Type`, with as much of the import path as it takes, tells two
+packages of one name apart. The struct's file need not import it, since the generated file does. The generated code
+calls `Validate` on the zero value of `Type` and records what it returns at the field, with the code and params the
+rule gave it.
 
 ## Nesting and hooks
 
@@ -170,6 +179,10 @@ they first broke:
   "confirm": [{"error": "confirmation", "attribute": "password"}]
 }
 ```
+
+A field is keyed by the name its json tag gives it, or by its Go name without one, whatever the transport. Behind a gRPC
+handler, a use case input without json tags reports `TodoID`; tag the field `json:"id"` to report the name the proto
+declares. A message that protoc-gen-go generates carries json tags with the proto's field names already.
 
 The rejected value is never part of an error: errors end up in logs, and the value may be personal data.
 
@@ -207,6 +220,16 @@ type Email = validated.String[rules.Email]
 type SignUp struct {
 	Email   Email  `json:"email"   validate:"required"`      // the type holds the format; the tag, that it is there
 	Website string `json:"website" validate:"omitempty,url"` // the tag checks the format of a plain string
+}
+```
+
+`rule=` applies a rule of your own to a plain field, so a request can take a `*time.Time` and check it as
+`validated.Value[time.Time, model.CompletedAtRule]` would:
+
+```go
+//kanna:validate
+type UpdateTask struct {
+	CompletedAt *time.Time `json:"completed_at" validate:"rule=model.CompletedAtRule"` // nil skips it
 }
 ```
 
@@ -250,8 +273,8 @@ is marked `//kanna:validate`, it succeeds, since a `//go:generate` line left beh
 line was most likely meant to go as well:
 
 ```console
-$ go generate
-warning: no struct is marked //kanna:validate in .
+$ go generate ./...
+warning: no struct is marked //kanna:validate in example.com/app/user
 ```
 
 A package whose structs have all lost `//kanna:validate` has its `validate_gen.go` removed; a file of that name without

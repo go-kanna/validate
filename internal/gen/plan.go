@@ -92,13 +92,18 @@ type planner struct {
 	// rewritten are the import paths of the packages whose output this run
 	// rewrites, where a Validate an earlier run generated may be about to go.
 	rewritten map[string]bool
+
+	// refs is where a qualified rule= looks for its package, besides among
+	// what the struct's package imports.
+	refs refScope
 }
 
 // plans decides what the Validate method of each target checks. rewritten
-// names the packages whose output this run rewrites. A target with a rule that
-// does not apply is left out, and said why.
-func plans(fset *token.FileSet, targets []target, rewritten map[string]bool) ([]plan, []diag.Diag) {
-	p := planner{fset: fset, targets: make(map[*types.TypeName]bool, len(targets)), rewritten: rewritten}
+// names the packages whose output this run rewrites, and refs where a qualified
+// rule= looks besides among what the struct's package imports. A target with a
+// rule that does not apply is left out, and said why.
+func plans(fset *token.FileSet, targets []target, rewritten map[string]bool, refs refScope) ([]plan, []diag.Diag) {
+	p := planner{fset: fset, targets: make(map[*types.TypeName]bool, len(targets)), rewritten: rewritten, refs: refs}
 	for _, t := range targets {
 		p.targets[t.Named.Obj()] = true
 	}
@@ -124,10 +129,12 @@ func (p planner) plan(t target) (plan, []diag.Diag) {
 		fields[i] = sibling{name: f.Name, jsonName: name, typ: f.Type}
 	}
 
+	own := t.Named.Obj().Pkg()
+	refs := refScope{pkgs: append(slices.Clip(p.refs.pkgs), reachable(own)...), module: p.refs.module}
 	pl := plan{target: t}
 	var diags []diag.Diag
 	for i, f := range t.Fields {
-		at := site{pkg: t.Named.Obj().Pkg(), fields: slices.Delete(slices.Clone(fields), i, i+1)}
+		at := site{pkg: own, refs: refs, fields: slices.Delete(slices.Clone(fields), i, i+1)}
 		fp, errs := p.field(f, at)
 		for _, err := range errs {
 			diags = append(diags, fieldDiag(f, err))
@@ -205,17 +212,18 @@ func (p planner) value(t types.Type, levels []level, at site, enclosing []types.
 	v.nest = p.hasValidate(t)
 
 	elem, ok := elemOf(t)
+	elemAt := site{pkg: at.pkg, refs: at.refs}
 	switch {
 	case len(below) > 0 && !ok:
 		errs = append(errs, ruleErrorf("dive needs a slice, array, or map, not %s", at.typeString(t)))
 	case len(below) > 0:
 		var es []error
-		v.elem, es = p.value(elem, below, site{pkg: at.pkg}, nil)
+		v.elem, es = p.value(elem, below, elemAt, nil)
 		errs = append(errs, es...)
 	case ok && !v.nest:
 		// The elements are validated whether or not the tag dives: a slice of
 		// structs that validate themselves is checked as the structs would be.
-		v.elem, _ = p.value(elem, nil, site{pkg: at.pkg}, enclosing)
+		v.elem, _ = p.value(elem, nil, elemAt, enclosing)
 	}
 
 	return pruned(v), errs

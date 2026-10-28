@@ -85,3 +85,54 @@ type Target struct {
 		}
 	}
 }
+
+// A rule is called on the zero value of its type, which only a struct or an
+// array spells as a composite literal.
+func TestEmit_CallsRulesOnTheirZeroValues(t *testing.T) {
+	t.Parallel()
+
+	pkg := pkgtest.Load(t, map[string]string{"test.go": `package test
+
+type (
+	Struct struct{}
+	Array  [1]int
+	Text   string
+	Flag   bool
+	Count  int
+	List   []int
+	Check  func()
+)
+
+func (Struct) Validate(string) error { return nil }
+func (Array) Validate(string) error  { return nil }
+func (Text) Validate(string) error   { return nil }
+func (Flag) Validate(string) error   { return nil }
+func (Count) Validate(string) error  { return nil }
+func (List) Validate(string) error   { return nil }
+func (Check) Validate(string) error  { return nil }
+
+//kanna:validate
+type Target struct {
+	S string ` + "`validate:\"rule=Struct,rule=Array,rule=Text,rule=Flag,rule=Count,rule=List,rule=Check\"`" + `
+}
+`})
+
+	got, err := gen.Emit(pkg.Fset, []*packages.Package{pkg}, nil)
+	if err != nil {
+		t.Fatalf("emit: %v\n%s", err, got)
+	}
+
+	for _, want := range []string{
+		`errs.Add("S", Struct{}.Validate(x.S))`,
+		`errs.Add("S", Array{}.Validate(x.S))`,
+		`errs.Add("S", Text("").Validate(x.S))`,
+		`errs.Add("S", Flag(false).Validate(x.S))`,
+		`errs.Add("S", Count(0).Validate(x.S))`,
+		`errs.Add("S", List(nil).Validate(x.S))`,
+		`errs.Add("S", Check(nil).Validate(x.S))`,
+	} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("output does not contain %q:\n%s", want, got)
+		}
+	}
+}

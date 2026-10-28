@@ -38,7 +38,7 @@ func Targets(fset *token.FileSet, pkgs []*packages.Package) ([]string, []string)
 // besides.
 func Emit(fset *token.FileSet, pkgs []*packages.Package, declared []string) ([]byte, error) {
 	found, diags := targets(fset, scan.Structs(pkgs))
-	planned, ds := plans(fset, found, map[string]bool{pkgs[0].PkgPath: true})
+	planned, ds := plans(fset, found, map[string]bool{pkgs[0].PkgPath: true}, refScope{pkgs: typesOf(pkgs)})
 	if diags = append(diags, ds...); len(diags) > 0 {
 		return nil, fmt.Errorf("%v", diags)
 	}
@@ -55,7 +55,7 @@ func Plans(fset *token.FileSet, pkgs []*packages.Package) (map[string][]string, 
 	for _, pkg := range pkgs {
 		rewritten[pkg.PkgPath] = true
 	}
-	planned, ds := plans(fset, found, rewritten)
+	planned, ds := plans(fset, found, rewritten, refScope{pkgs: typesOf(pkgs)})
 	diags = append(diags, ds...)
 
 	spelled := make(map[string][]string, len(planned))
@@ -115,10 +115,12 @@ func NewSibling(name, jsonName string, t types.Type) Sibling {
 
 // ResolveRule resolves written, one rule as a tag spells it, such as "max=5",
 // against t, in a struct that pkg declares with fields besides, and spells out
-// the check, as describe does.
+// the check, as describe does. A qualified rule= may name pkg or what it
+// imports.
 func ResolveRule(written string, t types.Type, pkg *types.Package, fields []Sibling) (string, error) {
 	name, param, _ := strings.Cut(written, "=")
-	c, err := resolve(rule{name: name, param: param}, t, site{pkg: pkg, fields: fields})
+	at := site{pkg: pkg, refs: refScope{pkgs: reachable(pkg)}, fields: fields}
+	c, err := resolve(rule{name: name, param: param}, t, at)
 	if err != nil {
 		return "", err
 	}
@@ -133,7 +135,8 @@ func Hint(err error) string {
 	return ""
 }
 
-// describe spells c out, such as "runes<=50", ">=18", or "rules.Email".
+// describe spells c out, such as "runes<=50", ">=18", "rules.Email", or
+// "rule=test.Past".
 func describe(c check) string {
 	switch c := c.(type) {
 	case lengthCheck:
@@ -151,6 +154,8 @@ func describe(c check) string {
 		return "pattern(" + c.expr + ")"
 	case formatCheck:
 		return "rules." + c.rule
+	case ruleCheck:
+		return "rule=" + types.TypeString(c.typ, (*types.Package).Name)
 	}
 	return fmt.Sprintf("%#v", c)
 }
