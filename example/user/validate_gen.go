@@ -7,7 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/go-kanna/validate"
-	"github.com/go-kanna/validated/rules"
+	"github.com/go-kanna/value/rule"
 )
 
 var (
@@ -56,7 +56,7 @@ func (x CreateUserRequest) Validate() error {
 	}
 
 	if x.Website != nil {
-		errs.Add("website", rules.URL{}.Validate(*x.Website))
+		errs.Add("website", rule.URL(*x.Website))
 	}
 
 	if x.Address == (Address{}) {

@@ -7,15 +7,20 @@ import (
 	"strings"
 
 	"github.com/go-kanna/validate"
-	"github.com/go-kanna/validated"
-	"github.com/go-kanna/validated/rules"
+	"github.com/go-kanna/value/rule"
 )
 
+//go:generate go tool kanna-value
 //go:generate go tool kanna-validate
 
 // Email is an address checked when it is built or decoded, so the tag below
-// only has to say that one is required.
-type Email = validated.String[rules.Email]
+// only has to say that one is required. kanna-value turns it into a value type
+// in value_gen.go.
+//
+//kanna:value
+type Email struct{ s string }
+
+func (Email) validate(s string) error { return rule.Email(s) }
 
 // CreateUserRequest is the body of a sign-up request.
 //
@@ -45,7 +50,7 @@ type Address struct {
 // for a rule a tag cannot express, such as this one, which depends on two
 // fields at once: an admin must sign up with a company address.
 func (x CreateUserRequest) validate(errs *validate.Errors) {
-	if x.Role == "admin" && !strings.HasSuffix(x.Email.Get(), "@example.com") {
+	if x.Role == "admin" && !strings.HasSuffix(x.Email.String(), "@example.com") {
 		errs.Add("email", validate.Fail("corp_domain"))
 	}
 }

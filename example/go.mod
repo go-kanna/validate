@@ -4,11 +4,14 @@ go 1.27.0
 
 toolchain go1.27.3
 
-tool github.com/go-kanna/validate/cmd/kanna-validate
+tool (
+	github.com/go-kanna/validate/cmd/kanna-validate
+	github.com/go-kanna/value/cmd/kanna-value
+)
 
 require (
 	github.com/go-kanna/validate v0.0.3
-	github.com/go-kanna/validated v0.0.2
+	github.com/go-kanna/value v0.0.1
 )
 
 require (
