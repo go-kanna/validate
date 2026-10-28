@@ -267,8 +267,8 @@ is marked `//kanna:validate`, it succeeds, since a `//go:generate` line left beh
 line was most likely meant to go as well:
 
 ```console
-$ go generate
-warning: no struct is marked //kanna:validate in .
+$ go generate ./...
+warning: no struct is marked //kanna:validate in example.com/app/user
 ```
 
 A package whose structs have all lost `//kanna:validate` has its `validate_gen.go` removed; a file of that name without

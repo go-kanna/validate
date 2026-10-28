@@ -50,12 +50,18 @@ func run(dir string, cfg config, patterns []string) ([]output.Change, []diag.Dia
 
 	changes, diags := generate(set)
 	if !diag.HasErrors(diags) && !slices.ContainsFunc(changes, func(c output.Change) bool { return !c.Remove }) {
-		// Nothing to stop for: a go:generate line left behind does no harm.
-		in := strings.Join(patterns, " ")
-		if in == "" {
-			in = "."
+		// Nothing to stop for: a go:generate line left behind does no harm. The
+		// packages are named by path, as go generate ./... runs every one of
+		// them in a "." of its own.
+		in := make([]string, len(set.Packages))
+		for i, pkg := range set.Packages {
+			in[i] = pkg.PkgPath
 		}
-		diags = append(diags, diag.Warningf(token.Position{}, "no struct is marked //kanna:%s in %s", directiveKey, in))
+		if len(in) == 0 {
+			in = patterns // which matched no package
+		}
+		diags = append(diags, diag.Warningf(token.Position{},
+			"no struct is marked //kanna:%s in %s", directiveKey, strings.Join(in, ", ")))
 	}
 	return changes, append(set.Diags, diags...)
 }

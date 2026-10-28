@@ -178,7 +178,7 @@ func TestCommand_RemovesLeftover(t *testing.T) {
 		t.Fatalf("run = %d, stderr %q", code, stderr)
 	}
 	writeFile(t, filepath.Join(dir, "app.go"), "package app\n\ntype Signup struct{ Name string }\n")
-	const nothing = "warning: no struct is marked //kanna:validate in .\n"
+	const nothing = "warning: no struct is marked //kanna:validate in example.com/app\n"
 
 	code, _, stderr := run(t, dir, "-check")
 	want := nothing + "./validate_gen.go: error: left over from an earlier run; run go generate\n"
@@ -319,6 +319,50 @@ type Contact struct {
 		if !strings.Contains(stderr, want) {
 			t.Errorf("stderr = %q, want it to contain %q", stderr, want)
 		}
+	}
+}
+
+func TestCommand_WarnsWhenNothingIsMarked(t *testing.T) {
+	t.Parallel()
+
+	const plain = "package app\n\ntype Signup struct{ Name string }\n"
+	tests := []struct {
+		name  string
+		files map[string]string
+		args  []string
+		want  string
+	}{
+		{
+			name:  "the package in the directory",
+			files: map[string]string{"app.go": plain},
+			want:  "warning: no struct is marked //kanna:validate in example.com/app\n",
+		},
+		{
+			name: "every package",
+			files: map[string]string{
+				"app.go":         plain,
+				"other/other.go": strings.Replace(plain, "package app", "package other", 1),
+			},
+			args: []string{"./..."},
+			want: "warning: no struct is marked //kanna:validate in example.com/app, example.com/app/other\n",
+		},
+		{
+			name:  "patterns matching no package",
+			files: map[string]string{},
+			args:  []string{"./..."},
+			want:  "warning: no struct is marked //kanna:validate in ./...\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := writeModule(t, tt.files)
+			if code, _, stderr := run(t, dir, tt.args...); code != cli.ExitOK || stderr != tt.want {
+				t.Errorf("run = %d, stderr %q; want success with %q", code, stderr, tt.want)
+			}
+		})
 	}
 }
 
