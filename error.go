@@ -10,10 +10,10 @@ import (
 // Coded is an error that names the rule a value broke.
 //
 // The code is stable enough to key a translated message or an API response, and
-// the params carry what such a message needs. *validated.Error from
-// github.com/go-kanna/validated is Coded too, which is how a rule held in a type
-// and one checked by a tag end up in the same Errors without either package
-// importing the other.
+// the params carry what such a message needs. *rule.Error from
+// github.com/go-kanna/value/rule is Coded too, which is how a rule held in a
+// value type and one checked by a tag end up in the same Errors without either
+// package importing the other.
 type Coded interface {
 	error
 	Code() string

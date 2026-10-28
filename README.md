@@ -121,8 +121,8 @@ The tags are go-playground/validator's; the codes and params are those of Rails'
 | `oneof=a b c`                        | strings, integers                     | `inclusion`                                                                |                                    |
 | `eqfield=Field`                      | a field of the same type              | `confirmation`                                                             | `attribute`: the other's JSON name |
 | `pattern=regexp`                     | strings                               | `invalid`                                                                  |                                    |
-| `email`, `url`, `uuid`               | strings                               | `email`, `url`, `uuid`, from [go-kanna/validated](#with-go-kannavalidated) |                                    |
-| `rule=Type`, `rule=pkg.Type`         | what its `Validate(T) error` takes    | the rule's own                                                             | the rule's own                     |
+| `email`, `url`, `uuid`               | strings                               | `email`, `url`, `uuid`, from [go-kanna/value](#with-kanna-value)           |                                    |
+| `rule=Type`, `rule=pkg.Type`         | what `Type` holds or validates        | the rule's own                                                             | the rule's own                     |
 | `omitempty`                          | anything with a zero value            | lets the zero value past the rules after it                                |                                    |
 | `dive`                               | slices, arrays, maps                  | applies the rules after it to each element, or each value of a map         |                                    |
 
@@ -138,13 +138,13 @@ Where it differs from go-playground:
   backslash is written `\\`; a tag that does not unquote stops generation instead of being skipped in silence.
 - `omitempty` comes first among the rules of its level.
 
-`rule=Type` applies a rule of your own: a type with a method `Validate(T) error` that the field's value, or each element
-after `dive`, can be passed to, such as a rule written for [go-kanna/validated](#with-go-kannavalidated). A bare `Type`
-is one of the struct's package. `pkg.Type` names the package by its name, among the packages of your module and those
-the struct's package imports, directly or not; `a/pkg.Type`, with as much of the import path as it takes, tells two
-packages of one name apart. The struct's file need not import it, since the generated file does. The generated code
-calls `Validate` on the zero value of `Type` and records what it returns at the field, with the code and params the
-rule gave it.
+`rule=Type` applies the rule of `Type` to the field's value, or to each element after `dive`. `Type` is a value type of
+[kanna-value](#with-kanna-value), whose constructor `NewType(T) (Type, error)` holds a value to its rule, or a type with
+a method `Validate(T) error`, called on its zero value. A bare `Type` is one of the struct's package. `pkg.Type` names
+the package by its name, among the packages of your module and those the struct's package imports, directly or not;
+`a/pkg.Type`, with as much of the import path as it takes, tells two packages of one name apart. The struct's file need
+not import it, since the generated file does. The generated code records at the field what the constructor or
+`Validate` returns, with the code and params the rule gave it.
 
 ## Nesting and hooks
 
@@ -202,19 +202,23 @@ if err := validate.DecodeJSON(r.Body, &req); err != nil {
 }
 ```
 
-A field whose type rejects its value while decoding — a type from go-kanna/validated, say — does not stop the decoding:
+A field whose type rejects its value while decoding — a value type of kanna-value, say — does not stop the decoding:
 the rejection is reported at the field's path, alongside whatever the tags find in the rest. `json.Unmarshal` cannot do
 this; it stops at the first rejection, and does not say which field it came from. `DecodeJSON` decodes through
 encoding/json/v2, which matches names case-sensitively and rejects duplicate names.
 
-## With go-kanna/validated
+## With kanna-value
 
-[go-kanna/validated](https://github.com/go-kanna/validated) holds a value to its rule wherever it goes: when it is
-built, decoded, or scanned from a database. The `email`, `url`, and `uuid` tags call the same rules and report the same
-codes, so a format checked by a tag and one held in a type read alike in an API response.
+[kanna-value](https://github.com/go-kanna/value) generates value types that hold a value to its rule wherever it goes:
+when it is built, decoded, or scanned from a database. The `email`, `url`, and `uuid` tags call the same rules, from its
+package `rule`, and report the same codes, so a format checked by a tag and one held in a type read alike in an API
+response.
 
 ```go
-type Email = validated.String[rules.Email]
+//kanna:value
+type Email struct{ s string }
+
+func (Email) validate(s string) error { return rule.Email(s) }
 
 //kanna:validate
 type SignUp struct {
@@ -223,22 +227,30 @@ type SignUp struct {
 }
 ```
 
-`rule=` applies a rule of your own to a plain field, so a request can take a `*time.Time` and check it as
-`validated.Value[time.Time, model.CompletedAtRule]` would:
+`rule=` applies the rule of a value type to a plain field, through its constructor. A request built from something
+other than JSON, such as a gRPC message, can take a `*time.Time` and check it as `model.CompletedAt` would:
 
 ```go
 //kanna:validate
 type UpdateTask struct {
-	CompletedAt *time.Time `json:"completed_at" validate:"rule=model.CompletedAtRule"` // nil skips it
+	CompletedAt *time.Time `json:"completed_at" validate:"rule=model.CompletedAt"` // nil skips it
 }
 ```
 
-go-kanna/validated is a module of its own: `go get github.com/go-kanna/validated` when you use these tags or its types.
-A generated file that needs it while your go.mod does not require it gets a warning rather than a build that fails
-later:
+```go
+	if x.CompletedAt != nil {
+		if _, err := model.NewCompletedAt(*x.CompletedAt); err != nil {
+			errs.Add("completed_at", err)
+		}
+	}
+```
+
+go-kanna/value is a module of its own: `go get github.com/go-kanna/value` when you use these tags, or
+`go get -tool github.com/go-kanna/value/cmd/kanna-value` for its types. A generated file that needs it while your go.mod
+does not require it gets a warning rather than a build that fails later:
 
 ```console
-./validate_gen.go: warning: imports github.com/go-kanna/validated/rules, which go.mod does not require; run go mod tidy
+./validate_gen.go: warning: imports github.com/go-kanna/value/rule, which go.mod does not require; run go mod tidy
 ```
 
 ## Linting
