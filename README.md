@@ -178,6 +178,10 @@ they first broke:
 }
 ```
 
+A field is keyed by the name its json tag gives it, or by its Go name without one, whatever the transport. Behind a gRPC
+handler, a use case input without json tags reports `TodoID`; tag the field `json:"id"` to report the name the proto
+declares. A message that protoc-gen-go generates carries json tags with the proto's field names already.
+
 The rejected value is never part of an error: errors end up in logs, and the value may be personal data.
 
 ## Decoding requests
