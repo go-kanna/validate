@@ -41,16 +41,26 @@ type Fields struct {
 	R     rune
 }
 
-// Deadline is a value type as kanna-value generates one, down to the
-// constructor that rule= calls.
+// Deadline is a value type as kanna-value generates one, down to what rule=
+// knows it by: its accessor and its constructor.
 type Deadline struct{ t time.Time }
+
+func (d Deadline) Time() time.Time { return d.t }
 
 func NewDeadline(t time.Time) (Deadline, error) { return Deadline{t: t}, nil }
 
 // level is an unexported value type, whose constructor is unexported too.
 type level struct{ n int }
 
+func (l level) Int() int { return l.n }
+
 func newLevel(n int) (level, error) { return level{n: n}, nil }
+
+// Plain has a constructor of kanna-value's kind, but no accessor, so it is no
+// value type.
+type Plain struct{ t time.Time }
+
+func NewPlain(t time.Time) (Plain, error) { return Plain{t: t}, nil }
 
 // Off has a constructor, but not one that can fail.
 type Off struct{}
@@ -247,6 +257,10 @@ func TestResolveRule_Errors(t *testing.T) {
 				"nor a method Validate(time.Time) error",
 		},
 		{rule: "rule=Off", field: "S", wantErr: "rule=Off has neither a constructor NewOff(string) (Off, error)"},
+		{
+			rule: "rule=Plain", field: "When",
+			wantErr: "rule=Plain has neither a constructor NewPlain(time.Time) (Plain, error)",
+		},
 		{rule: "rule=Deadline", field: "S", wantErr: "rule=Deadline holds time.Time, not string"},
 		{
 			rule: "rule=Strict", field: "S",

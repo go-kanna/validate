@@ -18,9 +18,11 @@ func (Since2000) Validate(t time.Time) error {
 	return nil
 }
 
-// Deadline is a value type as kanna-value generates one, down to the
-// constructor that rule= calls.
+// Deadline is a value type as kanna-value generates one, down to what rule=
+// knows it by: its accessor and its constructor.
 type Deadline struct{ t time.Time }
+
+func (d Deadline) Time() time.Time { return d.t }
 
 func NewDeadline(t time.Time) (Deadline, error) {
 	if t.Year() < 2000 {

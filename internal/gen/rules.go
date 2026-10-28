@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/go-kanna/internal/suggest"
+	"github.com/go-kanna/internal/valuetype"
 )
 
 // check is a rule resolved against the type of the value it checks. Its type
@@ -328,19 +329,20 @@ func typeRule(r rule, t types.Type, at site) (check, error) {
 		return nil, ruleErrorf("rule=%s: an interface cannot be a rule, since its zero value is nil", r.param)
 	}
 
-	if ctor := constructorOf(obj); ctor != nil {
-		if param := ctor.Signature().Params().At(0).Type(); !types.AssignableTo(t, param) {
-			return nil, ruleErrorf("rule=%s holds %s, not %s", r.param, at.typeString(param), at.typeString(t))
+	if v, ok := valuetype.Of(typ); ok && v.Constructor != nil {
+		if !types.AssignableTo(t, v.Held) {
+			return nil, ruleErrorf("rule=%s holds %s, not %s", r.param, at.typeString(v.Held), at.typeString(t))
 		}
-		return ruleCheck{typ: typ, ctor: ctor}, nil
+		return ruleCheck{typ: typ, ctor: v.Constructor}, nil
 	}
 
 	m, _, indirect := types.LookupFieldOrMethod(typ, false, nil, "Validate")
 	fn, ok := m.(*types.Func)
 	if !ok || !isRuleMethod(fn.Signature()) {
+		newFunc, _ := valuetype.Constructors(obj.Name())
 		err := ruleErrorf("rule=%s has neither a constructor %s(%s) (%s, error), as kanna-value generates, "+
 			"nor a method Validate(%s) error",
-			r.param, constructorName(obj), at.typeString(t), obj.Name(), at.typeString(t))
+			r.param, newFunc, at.typeString(t), obj.Name(), at.typeString(t))
 		switch {
 		case ok:
 			err.hint = "its Validate is " + at.typeString(fn.Signature())
@@ -355,37 +357,11 @@ func typeRule(r rule, t types.Type, at site) (check, error) {
 	return ruleCheck{typ: typ}, nil
 }
 
-// constructorOf returns the constructor that kanna-value generates for the
-// value type obj names, NewX(T) (X, error) beside it, or nil when there is
-// none.
-func constructorOf(obj *types.TypeName) *types.Func {
-	fn, ok := obj.Pkg().Scope().Lookup(constructorName(obj)).(*types.Func)
-	if !ok {
-		return nil
-	}
-	sig := fn.Signature()
-	if sig.Params().Len() != 1 || sig.Variadic() || sig.Results().Len() != 2 ||
-		!types.Identical(sig.Results().At(0).Type(), obj.Type()) ||
-		!types.Identical(sig.Results().At(1).Type(), types.Universe.Lookup("error").Type()) {
-		return nil
-	}
-	return fn
-}
-
-// constructorName names the constructor of the type obj names, exported as
-// the type is: NewX, or newX for an unexported x.
-func constructorName(obj *types.TypeName) string {
-	if obj.Exported() {
-		return "New" + obj.Name()
-	}
-	return "new" + strings.ToUpper(obj.Name()[:1]) + obj.Name()[1:]
-}
-
 // isRule reports whether rule= can name the type obj names, as far as what is
 // loaded of its package tells: a value type with its constructor, or a type
 // with a rule's Validate.
 func isRule(obj *types.TypeName) bool {
-	if constructorOf(obj) != nil {
+	if v, ok := valuetype.Of(obj.Type()); ok && v.Constructor != nil {
 		return true
 	}
 	m, _, _ := types.LookupFieldOrMethod(obj.Type(), false, nil, "Validate")
