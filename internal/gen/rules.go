@@ -55,16 +55,18 @@ type patternCheck struct {
 	expr string
 }
 
-// formatCheck runs rule, a type of github.com/go-kanna/validated/rules, on a
+// formatCheck runs rule, a function of github.com/go-kanna/value/rule, on a
 // string.
 type formatCheck struct {
 	rule string
 }
 
-// ruleCheck runs the rule typ, a type with a Validate(T) error method that the
-// value can be passed to, on the zero value of typ.
+// ruleCheck runs the rule typ, on the value: the Validate(T) error method of
+// typ, called on its zero value, or, for a value type of kanna-value, ctor, the
+// constructor that holds a value to the type's rule.
 type ruleCheck struct {
-	typ types.Type
+	typ  types.Type
+	ctor *types.Func
 }
 
 func (lengthCheck) isCheck()  {}
@@ -291,9 +293,9 @@ func pattern(r rule, t types.Type, at site) (check, error) {
 	return patternCheck{expr: r.param}, nil
 }
 
-// format resolves email, url, and uuid, which run the rule of
-// github.com/go-kanna/validated/rules named typeName.
-func format(typeName string) resolver {
+// format resolves email, url, and uuid, which run the function of
+// github.com/go-kanna/value/rule named funcName.
+func format(funcName string) resolver {
 	return func(r rule, t types.Type, at site) (check, error) {
 		if r.param != "" {
 			return nil, ruleErrorf("rule %q takes no value, got %q", r.name, r.param)
@@ -301,13 +303,14 @@ func format(typeName string) resolver {
 		if shapeOf(t) != shapeString {
 			return nil, cannotApply(r, t, at)
 		}
-		return formatCheck{rule: typeName}, nil
+		return formatCheck{rule: funcName}, nil
 	}
 }
 
-// typeRule resolves rule=Type, which runs a rule as go-kanna/validated writes
-// one: a type whose Validate(T) error accepts or rejects a T, called on its zero
-// value as validated calls it.
+// typeRule resolves rule=Type, which runs the rule of Type on the value. Type
+// is a value type of kanna-value, whose constructor NewType(T) (Type, error)
+// holds a T to the rule, or a type whose Validate(T) error accepts or rejects a
+// T, called on its zero value.
 func typeRule(r rule, t types.Type, at site) (check, error) {
 	if err := needsValue(r); err != nil {
 		return nil, err
@@ -325,10 +328,19 @@ func typeRule(r rule, t types.Type, at site) (check, error) {
 		return nil, ruleErrorf("rule=%s: an interface cannot be a rule, since its zero value is nil", r.param)
 	}
 
+	if ctor := constructorOf(obj); ctor != nil {
+		if param := ctor.Signature().Params().At(0).Type(); !types.AssignableTo(t, param) {
+			return nil, ruleErrorf("rule=%s holds %s, not %s", r.param, at.typeString(param), at.typeString(t))
+		}
+		return ruleCheck{typ: typ, ctor: ctor}, nil
+	}
+
 	m, _, indirect := types.LookupFieldOrMethod(typ, false, nil, "Validate")
 	fn, ok := m.(*types.Func)
 	if !ok || !isRuleMethod(fn.Signature()) {
-		err := ruleErrorf("rule=%s has no method Validate(%s) error", r.param, at.typeString(t))
+		err := ruleErrorf("rule=%s has neither a constructor %s(%s) (%s, error), as kanna-value generates, "+
+			"nor a method Validate(%s) error",
+			r.param, constructorName(obj), at.typeString(t), obj.Name(), at.typeString(t))
 		switch {
 		case ok:
 			err.hint = "its Validate is " + at.typeString(fn.Signature())
@@ -341,6 +353,44 @@ func typeRule(r rule, t types.Type, at site) (check, error) {
 		return nil, ruleErrorf("rule=%s validates %s, not %s", r.param, at.typeString(param), at.typeString(t))
 	}
 	return ruleCheck{typ: typ}, nil
+}
+
+// constructorOf returns the constructor that kanna-value generates for the
+// value type obj names, NewX(T) (X, error) beside it, or nil when there is
+// none.
+func constructorOf(obj *types.TypeName) *types.Func {
+	fn, ok := obj.Pkg().Scope().Lookup(constructorName(obj)).(*types.Func)
+	if !ok {
+		return nil
+	}
+	sig := fn.Signature()
+	if sig.Params().Len() != 1 || sig.Variadic() || sig.Results().Len() != 2 ||
+		!types.Identical(sig.Results().At(0).Type(), obj.Type()) ||
+		!types.Identical(sig.Results().At(1).Type(), types.Universe.Lookup("error").Type()) {
+		return nil
+	}
+	return fn
+}
+
+// constructorName names the constructor of the type obj names, exported as
+// the type is: NewX, or newX for an unexported x.
+func constructorName(obj *types.TypeName) string {
+	if obj.Exported() {
+		return "New" + obj.Name()
+	}
+	return "new" + strings.ToUpper(obj.Name()[:1]) + obj.Name()[1:]
+}
+
+// isRule reports whether rule= can name the type obj names, as far as what is
+// loaded of its package tells: a value type with its constructor, or a type
+// with a rule's Validate.
+func isRule(obj *types.TypeName) bool {
+	if constructorOf(obj) != nil {
+		return true
+	}
+	m, _, _ := types.LookupFieldOrMethod(obj.Type(), false, nil, "Validate")
+	fn, ok := m.(*types.Func)
+	return ok && isRuleMethod(fn.Signature())
 }
 
 // isRuleMethod reports whether sig is that of a rule's Validate: func(T) error.

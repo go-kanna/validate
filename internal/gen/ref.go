@@ -89,9 +89,13 @@ func (s refScope) pick(ref, qual string) (*types.Package, error) {
 }
 
 // unresolved returns the qualifiers of the rule= tags of the structs marked in
-// pkgs that name no type among what is loaded: pkgs themselves, and what the
+// pkgs that name no rule among what is loaded: pkgs themselves, and what the
 // struct's package imports. Their packages have to be looked for in the rest
 // of the user's module.
+//
+// A type that is loaded but is no rule may come from a package loaded only in
+// part, as complete explains, so its qualifier counts as unresolved too: the
+// constructor that makes it a value type of kanna-value may be what is missing.
 func unresolved(fset *token.FileSet, pkgs []*packages.Package) []string {
 	found, _ := targets(fset, scan.Structs(pkgs))
 	roots := typesOf(pkgs)
@@ -105,8 +109,8 @@ func unresolved(fset *token.FileSet, pkgs []*packages.Package) []string {
 				continue
 			}
 			if !slices.ContainsFunc(loaded, func(p *types.Package) bool {
-				_, isType := p.Scope().Lookup(name).(*types.TypeName)
-				return isType && qualifies(qual, p.Path(), p.Name())
+				tn, isType := p.Scope().Lookup(name).(*types.TypeName)
+				return isType && qualifies(qual, p.Path(), p.Name()) && isRule(tn)
 			}) {
 				quals = append(quals, qual)
 			}
@@ -116,7 +120,7 @@ func unresolved(fset *token.FileSet, pkgs []*packages.Package) []string {
 }
 
 // unloaded returns, sorted, the packages of module that one of quals names and
-// that are not among loaded.
+// that are not among loaded, the packages loaded whole.
 func unloaded(loaded []*types.Package, module map[string]string, quals []string) []string {
 	var extra []string
 	for path, name := range module {
@@ -163,6 +167,22 @@ func reachable(pkgs ...*types.Package) []*types.Package {
 	}
 	for _, p := range pkgs {
 		walk(p)
+	}
+	return out
+}
+
+// complete returns pkgs and the packages they import directly, which are loaded
+// whole. A package imported only through another comes from that one's export
+// data, which holds of it only what that one's API needs: a type, say, without
+// the functions declared beside it.
+func complete(pkgs []*types.Package) []*types.Package {
+	out := slices.Clone(pkgs)
+	for _, p := range pkgs {
+		for _, imp := range p.Imports() {
+			if !slices.ContainsFunc(out, func(o *types.Package) bool { return o.Path() == imp.Path() }) {
+				out = append(out, imp)
+			}
+		}
 	}
 	return out
 }
