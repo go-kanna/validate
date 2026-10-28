@@ -122,6 +122,7 @@ The tags are go-playground/validator's; the codes and params are those of Rails'
 | `eqfield=Field`                      | a field of the same type              | `confirmation`                                                             | `attribute`: the other's JSON name |
 | `pattern=regexp`                     | strings                               | `invalid`                                                                  |                                    |
 | `email`, `url`, `uuid`               | strings                               | `email`, `url`, `uuid`, from [go-kanna/validated](#with-go-kannavalidated) |                                    |
+| `rule=Type`, `rule=pkg.Type`         | what its `Validate(T) error` takes    | the rule's own                                                             | the rule's own                     |
 | `omitempty`                          | anything with a zero value            | lets the zero value past the rules after it                                |                                    |
 | `dive`                               | slices, arrays, maps                  | applies the rules after it to each element, or each value of a map         |                                    |
 
@@ -136,6 +137,12 @@ Where it differs from go-playground:
 - `pattern=` takes the rest of the tag, commas included, so it comes last. The tag value is a Go string literal, so a
   backslash is written `\\`; a tag that does not unquote stops generation instead of being skipped in silence.
 - `omitempty` comes first among the rules of its level.
+
+`rule=Type` applies a rule of your own: a type with a method `Validate(T) error` that the field's value, or each element
+after `dive`, can be passed to, such as a rule written for [go-kanna/validated](#with-go-kannavalidated). `Type` is
+named as Go code in the struct's file would name it: a type of the struct's package, or `pkg.Type` of a package that
+file imports. The generated code calls `Validate` on the zero value of `Type` and records what it returns at the field,
+with the code and params the rule gave it.
 
 ## Nesting and hooks
 
@@ -207,6 +214,16 @@ type Email = validated.String[rules.Email]
 type SignUp struct {
 	Email   Email  `json:"email"   validate:"required"`      // the type holds the format; the tag, that it is there
 	Website string `json:"website" validate:"omitempty,url"` // the tag checks the format of a plain string
+}
+```
+
+`rule=` applies a rule of your own to a plain field, so a request can take a `*time.Time` and check it as
+`validated.Value[time.Time, model.CompletedAtRule]` would:
+
+```go
+//kanna:validate
+type UpdateTask struct {
+	CompletedAt *time.Time `json:"completed_at" validate:"rule=model.CompletedAtRule"` // nil skips it
 }
 ```
 

@@ -124,10 +124,11 @@ func (p planner) plan(t target) (plan, []diag.Diag) {
 		fields[i] = sibling{name: f.Name, jsonName: name, typ: f.Type}
 	}
 
+	scope := fileScope(t.Named.Obj())
 	pl := plan{target: t}
 	var diags []diag.Diag
 	for i, f := range t.Fields {
-		at := site{pkg: t.Named.Obj().Pkg(), fields: slices.Delete(slices.Clone(fields), i, i+1)}
+		at := site{pkg: t.Named.Obj().Pkg(), scope: scope, fields: slices.Delete(slices.Clone(fields), i, i+1)}
 		fp, errs := p.field(f, at)
 		for _, err := range errs {
 			diags = append(diags, fieldDiag(f, err))
@@ -205,17 +206,18 @@ func (p planner) value(t types.Type, levels []level, at site, enclosing []types.
 	v.nest = p.hasValidate(t)
 
 	elem, ok := elemOf(t)
+	elemAt := site{pkg: at.pkg, scope: at.scope}
 	switch {
 	case len(below) > 0 && !ok:
 		errs = append(errs, ruleErrorf("dive needs a slice, array, or map, not %s", at.typeString(t)))
 	case len(below) > 0:
 		var es []error
-		v.elem, es = p.value(elem, below, site{pkg: at.pkg}, nil)
+		v.elem, es = p.value(elem, below, elemAt, nil)
 		errs = append(errs, es...)
 	case ok && !v.nest:
 		// The elements are validated whether or not the tag dives: a slice of
 		// structs that validate themselves is checked as the structs would be.
-		v.elem, _ = p.value(elem, nil, site{pkg: at.pkg}, enclosing)
+		v.elem, _ = p.value(elem, nil, elemAt, enclosing)
 	}
 
 	return pruned(v), errs
@@ -227,6 +229,13 @@ func pruned(v *value) *value {
 		return nil
 	}
 	return v
+}
+
+// fileScope returns the scope of the file declaring obj, which holds the names
+// the file imports. obj is a type declared at the top level without type
+// parameters, which would open a scope of their own.
+func fileScope(obj *types.TypeName) *types.Scope {
+	return obj.Pkg().Scope().Innermost(obj.Pos())
 }
 
 // elemOf returns the element type of a slice or array, or the value type of a

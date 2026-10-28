@@ -280,6 +280,8 @@ func (m *method) check(c check, t types.Type, at place) {
 	case formatCheck:
 		m.printf("%s.Add(%s, %s.%s{}.Validate(%s))\n",
 			m.errs, at.path, m.f.Import(formatRulesPath, "rules"), c.rule, asString(at.expr, t))
+	case ruleCheck:
+		m.printf("%s.Add(%s, %s.Validate(%s))\n", m.errs, at.path, m.zeroValue(c.typ), at.expr)
 	}
 }
 
@@ -338,6 +340,26 @@ func (m *method) nonZero(v *value, at place) string {
 		return at.expr + " != (" + types.TypeString(v.typ, m.f.Qualifier) + "{})"
 	}
 	panic(fmt.Sprintf("emit: unknown zero test %d", v.zero))
+}
+
+// zeroValue is the zero value of t, a type with methods, as an expression to
+// call them on.
+func (m *method) zeroValue(t types.Type) string {
+	name := types.TypeString(t, m.f.Qualifier)
+	switch u := t.Underlying().(type) {
+	case *types.Struct, *types.Array:
+		return name + "{}"
+	case *types.Basic:
+		switch info := u.Info(); {
+		case info&types.IsString != 0:
+			return name + `("")`
+		case info&types.IsBoolean != 0:
+			return name + "(false)"
+		case info&types.IsNumeric != 0:
+			return name + "(0)"
+		}
+	}
+	return name + "(nil)"
 }
 
 // loopVar names the loop variable base at depth. Every loop of one depth in a

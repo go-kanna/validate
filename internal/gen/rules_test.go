@@ -35,6 +35,40 @@ type Fields struct {
 	U16   uint16
 	R     rune
 }
+
+// Past is a rule as go-kanna/validated writes one.
+type Past struct{}
+
+func (Past) Validate(t time.Time) error { return nil }
+
+// Even is a rule declared on an integer.
+type Even int
+
+func (Even) Validate(n int) error { return nil }
+
+// Anything accepts a value of any type.
+type Anything struct{}
+
+func (Anything) Validate(v any) error { return nil }
+
+// Within needs a type argument, which IntsWithin gives it.
+type Within[T any] struct{}
+
+func (Within[T]) Validate(v T) error { return nil }
+
+type IntsWithin = Within[int]
+
+// Strict declares its Validate on a pointer receiver.
+type Strict struct{}
+
+func (*Strict) Validate(s string) error { return nil }
+
+// Loose has a Validate that is not a rule's.
+type Loose struct{}
+
+func (Loose) Validate(s string) bool { return true }
+
+type Checker interface{ Validate(s string) error }
 `
 
 // fields loads rulesSrc and returns its package, and the type of each field of
@@ -86,6 +120,10 @@ func TestResolveRule(t *testing.T) {
 		{rule: "email", field: "S", want: "rules.Email"},
 		{rule: "url", field: "Kind", want: "rules.URL"},
 		{rule: "uuid", field: "S", want: "rules.UUID"},
+		{rule: "rule=Past", field: "When", want: "rule=test.Past"},
+		{rule: "rule=Even", field: "I", want: "rule=test.Even"},
+		{rule: "rule=Anything", field: "Sl", want: "rule=test.Anything"},
+		{rule: "rule=IntsWithin", field: "I", want: "rule=test.IntsWithin"},
 	}
 
 	for _, tt := range tests {
@@ -150,6 +188,32 @@ func TestResolveRule_Errors(t *testing.T) {
 		{rule: "pattern=^a$", field: "I", wantErr: `rule "pattern" cannot apply to int`},
 		{rule: "email", field: "I", wantErr: `rule "email" cannot apply to int`},
 		{rule: "url", field: "When", wantErr: `rule "url" cannot apply to time.Time`},
+		{rule: "rule", field: "When", wantErr: `rule "rule" needs a value, as in rule=…`},
+		{rule: "rule=*Past", field: "When", wantErr: "rule=*Past: not a type name, as in rule=Type or rule=pkg.Type"},
+		{rule: "rule=time.Time.Day", field: "When", wantErr: "rule=time.Time.Day: not a type name"},
+		{rule: "rule=Pst", field: "When", wantErr: "rule=Pst: no such type", wantHint: `did you mean "Past"?`},
+		{rule: "rule=Nothing", field: "When", wantErr: "rule=Nothing: no such type"},
+		{
+			rule: "rule=tme.Time", field: "When",
+			wantErr: "rule=tme.Time: this file does not import tme", wantHint: `did you mean "time"?`,
+		},
+		{rule: "rule=time.Tme", field: "When", wantErr: "rule=time.Tme: no such type", wantHint: `did you mean "time.Time"?`},
+		{rule: "rule=time.Now", field: "When", wantErr: "rule=time.Now: not a type"},
+		{rule: "rule=time", field: "When", wantErr: "rule=time: not a type"},
+		{rule: "rule=Within", field: "I", wantErr: "rule=Within: a generic type needs type arguments"},
+		{rule: "rule=Checker", field: "S", wantErr: "rule=Checker: an interface cannot be a rule"},
+		{rule: "rule=time.Time", field: "When", wantErr: "rule=time.Time has no method Validate(time.Time) error"},
+		{
+			rule: "rule=Strict", field: "S",
+			wantErr: "rule=Strict has no method Validate(string) error", wantHint: "its Validate has a pointer receiver",
+		},
+		{
+			rule: "rule=Loose", field: "S",
+			wantErr: "rule=Loose has no method Validate(string) error", wantHint: "its Validate is func(s string) bool",
+		},
+		{rule: "rule=Past", field: "S", wantErr: "rule=Past validates time.Time, not string"},
+		// The field's type is named as the struct's source names it.
+		{rule: "rule=Even", field: "Years", wantErr: "rule=Even validates int, not Age"},
 	}
 
 	for _, tt := range tests {

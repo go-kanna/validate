@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/go-kanna/validate"
+	"github.com/go-kanna/validate/internal/gen/testdata/emit/schedule"
 )
 
 var (
@@ -199,6 +200,14 @@ func (x Request) Validate() error {
 
 	for k, v := range x.ByPoint {
 		errs.Nest(validate.Key("by_point", k), v.Validate())
+	}
+
+	if x.DoneAt != nil {
+		errs.Add("done_at", schedule.Since2000{}.Validate(*x.DoneAt))
+	}
+
+	for i := range x.Shifts {
+		errs.Add(validate.Index("shifts", i), Since2000{}.Validate(x.Shifts[i]))
 	}
 
 	errs.Nest("", x.Audit.Validate())

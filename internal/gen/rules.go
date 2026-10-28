@@ -61,12 +61,19 @@ type formatCheck struct {
 	rule string
 }
 
+// ruleCheck runs the rule typ, a type with a Validate(T) error method that the
+// value can be passed to, on the zero value of typ.
+type ruleCheck struct {
+	typ types.Type
+}
+
 func (lengthCheck) isCheck()  {}
 func (compareCheck) isCheck() {}
 func (oneOfCheck) isCheck()   {}
 func (confirmCheck) isCheck() {}
 func (patternCheck) isCheck() {}
 func (formatCheck) isCheck()  {}
+func (ruleCheck) isCheck()    {}
 
 // site is where a rule is written, and so what it can refer to besides the
 // value it checks.
@@ -74,6 +81,10 @@ type site struct {
 	// pkg declares the struct. Messages name its types as its source does,
 	// without a qualifier.
 	pkg *types.Package
+
+	// scope is the scope of the file declaring the struct, which rule= names a
+	// type in as Go would there.
+	scope *types.Scope
 
 	// fields are the struct's other fields, for eqfield. They are nil below
 	// the field's own level, where eqfield has no field to compare with.
@@ -131,6 +142,8 @@ var resolvers = map[string]resolver{
 	"email": format("Email"),
 	"url":   format("URL"),
 	"uuid":  format("UUID"),
+
+	"rule": typeRule,
 }
 
 // resolve resolves r against t, the type of the value it checks, or explains
@@ -293,6 +306,50 @@ func format(typeName string) resolver {
 	}
 }
 
+// typeRule resolves rule=Type, which runs a rule as go-kanna/validated writes
+// one: a type whose Validate(T) error accepts or rejects a T, called on its zero
+// value as validated calls it.
+func typeRule(r rule, t types.Type, at site) (check, error) {
+	if err := needsValue(r); err != nil {
+		return nil, err
+	}
+	obj, err := at.lookupType(r.param)
+	if err != nil {
+		return nil, err
+	}
+
+	typ := obj.Type()
+	if generic, ok := typ.(interface{ TypeParams() *types.TypeParamList }); ok && generic.TypeParams().Len() > 0 {
+		return nil, ruleErrorf("rule=%s: a generic type needs type arguments, which a tag cannot give", r.param)
+	}
+	if types.IsInterface(typ) {
+		return nil, ruleErrorf("rule=%s: an interface cannot be a rule, since its zero value is nil", r.param)
+	}
+
+	m, _, indirect := types.LookupFieldOrMethod(typ, false, nil, "Validate")
+	fn, ok := m.(*types.Func)
+	if !ok || !isRuleMethod(fn.Signature()) {
+		err := ruleErrorf("rule=%s has no method Validate(%s) error", r.param, at.typeString(t))
+		switch {
+		case ok:
+			err.hint = "its Validate is " + at.typeString(fn.Signature())
+		case indirect:
+			err.hint = "its Validate has a pointer receiver; give it a value receiver, as the rule is called on its zero value"
+		}
+		return nil, err
+	}
+	if param := fn.Signature().Params().At(0).Type(); !types.AssignableTo(t, param) {
+		return nil, ruleErrorf("rule=%s validates %s, not %s", r.param, at.typeString(param), at.typeString(t))
+	}
+	return ruleCheck{typ: typ}, nil
+}
+
+// isRuleMethod reports whether sig is that of a rule's Validate: func(T) error.
+func isRuleMethod(sig *types.Signature) bool {
+	return sig.Params().Len() == 1 && !sig.Variadic() && sig.Results().Len() == 1 &&
+		types.Identical(sig.Results().At(0).Type(), types.Universe.Lookup("error").Type())
+}
+
 // numberBound checks that param, a number written in the tag, is one t can
 // hold, and returns it as the Go literal to compare with. A literal that does
 // not fit would only fail when the generated code is compiled, far from the tag
@@ -392,6 +449,67 @@ func needsValue(r rule) error {
 
 func cannotApply(r rule, t types.Type, at site) *ruleError {
 	return ruleErrorf("rule %q cannot apply to %s", r.name, at.typeString(t))
+}
+
+// lookupType finds the type that name, as rule= writes it, denotes in the file
+// declaring the struct: Type, or pkg.Type for a package the file imports.
+func (at site) lookupType(name string) (*types.TypeName, error) {
+	qual, sel, qualified := strings.Cut(name, ".")
+	if !token.IsIdentifier(qual) || qualified && !token.IsIdentifier(sel) {
+		return nil, ruleErrorf("rule=%s: not a type name, as in rule=Type or rule=pkg.Type", name)
+	}
+
+	var (
+		obj        types.Object
+		candidates []string
+	)
+	if qualified {
+		pkgName, ok := at.scope.Lookup(qual).(*types.PkgName)
+		if !ok {
+			err := ruleErrorf("rule=%s: this file does not import %s", name, qual)
+			if s, ok := suggest.Closest(qual, namesOf[*types.PkgName](at.scope)); ok {
+				err.hint = fmt.Sprintf("did you mean %q?", s)
+			}
+			return nil, err
+		}
+		scope := pkgName.Imported().Scope()
+		if o := scope.Lookup(sel); o != nil && o.Exported() {
+			obj = o
+		}
+		for _, n := range namesOf[*types.TypeName](scope) {
+			if token.IsExported(n) {
+				candidates = append(candidates, qual+"."+n)
+			}
+		}
+	} else {
+		_, obj = at.scope.LookupParent(name, token.NoPos)
+		candidates = namesOf[*types.TypeName](at.pkg.Scope())
+	}
+
+	if obj == nil {
+		err := ruleErrorf("rule=%s: no such type", name)
+		if s, ok := suggest.Closest(name, candidates); ok {
+			err.hint = fmt.Sprintf("did you mean %q?", s)
+		}
+		return nil, err
+	}
+	tn, ok := obj.(*types.TypeName)
+	if !ok {
+		return nil, ruleErrorf("rule=%s: not a type", name)
+	}
+	return tn, nil
+}
+
+// namesOf returns, sorted, the names in scope of the objects of type T, such as
+// the types it declares.
+func namesOf[T types.Object](scope *types.Scope) []string {
+	var names []string
+	for _, n := range scope.Names() {
+		if _, ok := scope.Lookup(n).(T); ok {
+			names = append(names, n)
+		}
+	}
+	return names
 }
 
 // typeString spells t as the source declaring the struct would.

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-kanna/validate"
+	"github.com/go-kanna/validate/internal/gen/testdata/emit/schedule"
 )
 
 // patternRequestZip takes the name the pattern of Request.Zip would get.
@@ -44,6 +45,10 @@ type Checker interface{ Validate() error }
 // Tree contains itself, and nothing in it validates itself.
 type Tree map[string]Tree
 
+// Since2000 names the rule of package schedule in this one too, so that a tag
+// can name it either way.
+type Since2000 = schedule.Since2000
+
 //kanna:validate
 type Request struct {
 	Name     string           `json:"name"      validate:"required,min=1,max=50"`
@@ -79,6 +84,8 @@ type Request struct {
 	Picks    *[]string        `json:"picks"     validate:"dive,required"`
 	ByPoint  map[Point]Item   `json:"by_point"`
 	Tree     Tree             `json:"tree"`
+	DoneAt   *time.Time       `json:"done_at"   validate:"rule=schedule.Since2000"`
+	Shifts   []time.Time      `json:"shifts"    validate:"dive,rule=Since2000"`
 	Audit
 }
 

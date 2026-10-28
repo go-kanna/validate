@@ -52,6 +52,8 @@ type Request struct {
 	Picks    *[]string        ` + "`json:\"picks\" validate:\"dive,required\"`" + `
 	Checked  Checked          ` + "`json:\"checked\"`" + `
 	Tree     Tree             ` + "`json:\"tree\"`" + `
+	Done     *time.Time       ` + "`json:\"done\" validate:\"rule=Past\"`" + `
+	Shifts   []time.Time      ` + "`json:\"shifts\" validate:\"dive,rule=Past\"`" + `
 	Ignored  string           ` + "`json:\"ignored\"`" + `
 	Audit
 }
@@ -75,6 +77,11 @@ func (Checked) Validate(strict bool) error { return nil }
 
 // Tree contains itself, and nothing in it validates itself.
 type Tree map[string]Tree
+
+// Past is a rule as go-kanna/validated writes one.
+type Past struct{}
+
+func (Past) Validate(t time.Time) error { return nil }
 
 //kanna:validate
 type Audit struct {
@@ -114,6 +121,8 @@ func TestPlans(t *testing.T) {
 			`Grid(grid): []{nest}`,
 			`Matrix(matrix): []{[]{>=0}}`,
 			`Picks(picks): *{[]{required==""}}`,
+			`Done(done): *{rule=test.Past}`,
+			`Shifts(shifts): []{rule=test.Past}`,
 			`Audit(Audit,flatten): nest`,
 		},
 		"Address": {`Zip(zip): required=="" pattern(^\d{3}-\d{4}$)`},
@@ -208,6 +217,11 @@ func TestPlans_Errors(t *testing.T) {
 			field: "Tags []string `validate:\"dive,eqfield=Other\"`\n\tOther string",
 			want:  "eqfield applies to the field itself, not to the elements after dive (field Tags)",
 		},
+		{
+			name:  "rule after dive",
+			field: "Tags []string `validate:\"dive,rule=Tag\"`",
+			want:  "rule=Tag: no such type (field Tags)",
+		},
 	}
 
 	for _, tt := range tests {
@@ -223,5 +237,42 @@ func TestPlans_Errors(t *testing.T) {
 				t.Errorf("diagnostics = %q, want one containing %q", diags, tt.want)
 			}
 		})
+	}
+}
+
+// A rule names a type as Go code in the struct's own file would: through that
+// file's imports, not those of the package's other files.
+func TestPlans_RuleNamesTypesAsTheStructsFileDoes(t *testing.T) {
+	t.Parallel()
+
+	got, diags := plans(t, map[string]string{
+		"past.go": `package test
+
+import "time"
+
+type Past struct{}
+
+func (Past) Validate(t time.Time) error { return nil }
+`,
+		"test.go": `package test
+
+import clock "time"
+
+//kanna:validate
+type Target struct {
+	At clock.Time ` + "`validate:\"rule=Past,rule=clock.Month,rule=time.Month\"`" + `
+}
+`,
+	})
+
+	if _, ok := got["Target"]; ok {
+		t.Errorf("Target was planned despite the errors")
+	}
+	want := []string{
+		"test.go:7:2: error: rule=clock.Month has no method Validate(time.Time) error (field At)",
+		"test.go:7:2: error: rule=time.Month: this file does not import time (field At)",
+	}
+	if !slices.Equal(diags, want) {
+		t.Errorf("diagnostics:\n got  %q\n want %q", diags, want)
 	}
 }

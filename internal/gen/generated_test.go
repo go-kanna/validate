@@ -142,6 +142,16 @@ func TestGenerated(t *testing.T) {
 				`"by_point.{1 0}.sku":[{"error":"blank"}]}`,
 		},
 		{
+			// The rules' own codes and params come through.
+			name: "rules",
+			modify: func(r *emit.Request) {
+				before := time.Date(1999, 12, 31, 0, 0, 0, 0, time.UTC)
+				r.DoneAt = &before
+				r.Shifts = []time.Time{time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC), before}
+			},
+			want: `{"done_at":[{"error":"too_early","year":2000}],"shifts[1]":[{"error":"too_early","year":2000}]}`,
+		},
+		{
 			name:   "hook",
 			modify: func(r *emit.Request) { r.Role, r.Age = "admin", 18 },
 			want:   `{"base":[{"error":"too_young_for_admin"}]}`,

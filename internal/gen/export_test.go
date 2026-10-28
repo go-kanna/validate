@@ -114,11 +114,11 @@ func NewSibling(name, jsonName string, t types.Type) Sibling {
 }
 
 // ResolveRule resolves written, one rule as a tag spells it, such as "max=5",
-// against t, in a struct that pkg declares with fields besides, and spells out
-// the check, as describe does.
+// against t, in a struct that the first file of pkg declares with fields
+// besides, and spells out the check, as describe does.
 func ResolveRule(written string, t types.Type, pkg *types.Package, fields []Sibling) (string, error) {
 	name, param, _ := strings.Cut(written, "=")
-	c, err := resolve(rule{name: name, param: param}, t, site{pkg: pkg, fields: fields})
+	c, err := resolve(rule{name: name, param: param}, t, site{pkg: pkg, scope: pkg.Scope().Child(0), fields: fields})
 	if err != nil {
 		return "", err
 	}
@@ -133,7 +133,8 @@ func Hint(err error) string {
 	return ""
 }
 
-// describe spells c out, such as "runes<=50", ">=18", or "rules.Email".
+// describe spells c out, such as "runes<=50", ">=18", "rules.Email", or
+// "rule=test.Past".
 func describe(c check) string {
 	switch c := c.(type) {
 	case lengthCheck:
@@ -151,6 +152,8 @@ func describe(c check) string {
 		return "pattern(" + c.expr + ")"
 	case formatCheck:
 		return "rules." + c.rule
+	case ruleCheck:
+		return "rule=" + types.TypeString(c.typ, (*types.Package).Name)
 	}
 	return fmt.Sprintf("%#v", c)
 }
