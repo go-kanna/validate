@@ -41,7 +41,23 @@ type Fields struct {
 	R     rune
 }
 
-// Past is a rule as go-kanna/validated writes one.
+// Deadline is a value type as kanna-value generates one, down to the
+// constructor that rule= calls.
+type Deadline struct{ t time.Time }
+
+func NewDeadline(t time.Time) (Deadline, error) { return Deadline{t: t}, nil }
+
+// level is an unexported value type, whose constructor is unexported too.
+type level struct{ n int }
+
+func newLevel(n int) (level, error) { return level{n: n}, nil }
+
+// Off has a constructor, but not one that can fail.
+type Off struct{}
+
+func NewOff(s string) Off { return Off{} }
+
+// Past is a rule type, whose Validate accepts or rejects a time.
 type Past struct{}
 
 func (Past) Validate(t time.Time) error { return nil }
@@ -122,9 +138,12 @@ func TestResolveRule(t *testing.T) {
 		{rule: "oneof=admin member", field: "Kind", want: `oneof("admin","member")`},
 		{rule: "oneof=1 2", field: "I", want: "oneof(1,2)"},
 		{rule: `pattern=^\d{3}-\d{4}$`, field: "S", want: `pattern(^\d{3}-\d{4}$)`},
-		{rule: "email", field: "S", want: "rules.Email"},
-		{rule: "url", field: "Kind", want: "rules.URL"},
-		{rule: "uuid", field: "S", want: "rules.UUID"},
+		{rule: "email", field: "S", want: "rule.Email"},
+		{rule: "url", field: "Kind", want: "rule.URL"},
+		{rule: "uuid", field: "S", want: "rule.UUID"},
+		{rule: "rule=Deadline", field: "When", want: "rule=test.Deadline via NewDeadline"},
+		{rule: "rule=test.Deadline", field: "When", want: "rule=test.Deadline via NewDeadline"},
+		{rule: "rule=level", field: "I", want: "rule=test.level via newLevel"},
 		{rule: "rule=Past", field: "When", want: "rule=test.Past"},
 		{rule: "rule=test.Past", field: "When", want: "rule=test.Past"},
 		{rule: "rule=Even", field: "I", want: "rule=test.Even"},
@@ -219,17 +238,23 @@ func TestResolveRule_Errors(t *testing.T) {
 			wantErr: "rule=html/template.Templat: no such type", wantHint: `did you mean "html/template.Template"?`,
 		},
 		// The path tells the two apart, and the one named has no such method.
-		{rule: "rule=text/template.Template", field: "S", wantErr: "rule=text/template.Template has no method"},
+		{rule: "rule=text/template.Template", field: "S", wantErr: "rule=text/template.Template has neither a constructor"},
 		{rule: "rule=Within", field: "I", wantErr: "rule=Within: a generic type needs type arguments"},
 		{rule: "rule=Checker", field: "S", wantErr: "rule=Checker: an interface cannot be a rule"},
-		{rule: "rule=time.Time", field: "When", wantErr: "rule=time.Time has no method Validate(time.Time) error"},
+		{
+			rule: "rule=time.Time", field: "When",
+			wantErr: "rule=time.Time has neither a constructor NewTime(time.Time) (Time, error), as kanna-value generates, " +
+				"nor a method Validate(time.Time) error",
+		},
+		{rule: "rule=Off", field: "S", wantErr: "rule=Off has neither a constructor NewOff(string) (Off, error)"},
+		{rule: "rule=Deadline", field: "S", wantErr: "rule=Deadline holds time.Time, not string"},
 		{
 			rule: "rule=Strict", field: "S",
-			wantErr: "rule=Strict has no method Validate(string) error", wantHint: "its Validate has a pointer receiver",
+			wantErr: "nor a method Validate(string) error", wantHint: "its Validate has a pointer receiver",
 		},
 		{
 			rule: "rule=Loose", field: "S",
-			wantErr: "rule=Loose has no method Validate(string) error", wantHint: "its Validate is func(s string) bool",
+			wantErr: "nor a method Validate(string) error", wantHint: "its Validate is func(s string) bool",
 		},
 		{rule: "rule=Past", field: "S", wantErr: "rule=Past validates time.Time, not string"},
 		// The field's type is named as the struct's source names it.

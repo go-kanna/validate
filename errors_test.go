@@ -14,7 +14,7 @@ import (
 )
 
 // typeError stands in for a Coded error from another package, such as
-// *validated.Error.
+// *rule.Error of go-kanna/value.
 type typeError struct{ code string }
 
 func (e *typeError) Error() string          { return "type: " + e.code }

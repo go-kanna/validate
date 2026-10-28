@@ -135,8 +135,8 @@ func Hint(err error) string {
 	return ""
 }
 
-// describe spells c out, such as "runes<=50", ">=18", "rules.Email", or
-// "rule=test.Past".
+// describe spells c out, such as "runes<=50", ">=18", "rule.Email",
+// "rule=test.Past", or "rule=test.Deadline via NewDeadline".
 func describe(c check) string {
 	switch c := c.(type) {
 	case lengthCheck:
@@ -153,9 +153,13 @@ func describe(c check) string {
 	case patternCheck:
 		return "pattern(" + c.expr + ")"
 	case formatCheck:
-		return "rules." + c.rule
+		return "rule." + c.rule
 	case ruleCheck:
-		return "rule=" + types.TypeString(c.typ, (*types.Package).Name)
+		spelled := "rule=" + types.TypeString(c.typ, (*types.Package).Name)
+		if c.ctor != nil {
+			spelled += " via " + c.ctor.Name()
+		}
+		return spelled
 	}
 	return fmt.Sprintf("%#v", c)
 }

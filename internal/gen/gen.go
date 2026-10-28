@@ -47,17 +47,18 @@ func run(dir string, cfg config, patterns []string) ([]output.Change, []diag.Dia
 	}
 
 	// A qualified rule= may name a package of the module that nothing loaded
-	// imports, as the struct's file need not. Listing the module takes the go
-	// command another run, so it waits for such a rule. What the rule names
-	// then has to come from the same load as the rest, or none of its types
-	// would be those the structs know, so everything is loaded again together.
+	// imports, as the struct's file need not, or one loaded only in part, as
+	// complete explains. Listing the module takes the go command another run,
+	// so it waits for such a rule. What the rule names then has to come from
+	// the same load as the rest, or none of its types would be those the
+	// structs know, so everything is loaded again together.
 	var module map[string]string
 	if quals := unresolved(set.Fset, set.Packages); len(quals) > 0 {
 		var err error
 		if module, err = modulePackages(dir, cfg.tags); err != nil {
 			return nil, []diag.Diag{diag.Errorf(token.Position{}, "%v", err)}
 		}
-		if extra := unloaded(reachable(typesOf(set.Packages)...), module, quals); len(extra) > 0 {
+		if extra := unloaded(complete(typesOf(set.Packages)), module, quals); len(extra) > 0 {
 			all := patterns
 			if len(all) == 0 {
 				all = []string{"."}

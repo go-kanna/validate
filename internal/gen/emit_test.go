@@ -21,8 +21,8 @@ import (
 //
 // testdata/emit keeps its golden file as validate_gen.go, a part of the package
 // that TestGenerated compiles and calls. testdata/format calls the rules of
-// go-kanna/validated, which this module does not require, so its golden file
-// is only compared.
+// go-kanna/value, which this module does not require, so its golden file is
+// only compared.
 func TestEmit(t *testing.T) {
 	t.Parallel()
 

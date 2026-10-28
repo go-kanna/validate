@@ -15,7 +15,7 @@ import (
 const generator = "kanna-validate"
 
 // formatRulesPath is the package holding the rules email, url, and uuid run.
-const formatRulesPath = "github.com/go-kanna/validated/rules"
+const formatRulesPath = "github.com/go-kanna/value/rule"
 
 // The comparison that breaks each requirement, and the error each reports.
 var (
@@ -123,6 +123,9 @@ type method struct {
 	// loopVars are the loop variables by name and depth, which loops of one
 	// depth share.
 	loopVars map[string][]string
+
+	// err is the variable errVar names, once a check has asked for it.
+	err string
 }
 
 // place is where a value is rendered.
@@ -278,10 +281,21 @@ func (m *method) check(c check, t types.Type, at place) {
 	case patternCheck:
 		m.printf("if !%s.MatchString(%s) {\n%s\n}\n", m.patterns[c.expr], asString(at.expr, t), m.add(at.path, "Invalid()"))
 	case formatCheck:
-		m.printf("%s.Add(%s, %s.%s{}.Validate(%s))\n",
-			m.errs, at.path, m.f.Import(formatRulesPath, "rules"), c.rule, asString(at.expr, t))
+		m.printf("%s.Add(%s, %s.%s(%s))\n",
+			m.errs, at.path, m.f.Import(formatRulesPath, "rule"), c.rule, asString(at.expr, t))
 	case ruleCheck:
-		m.printf("%s.Add(%s, %s.Validate(%s))\n", m.errs, at.path, m.zeroValue(c.typ), at.expr)
+		if c.ctor == nil {
+			m.printf("%s.Add(%s, %s.Validate(%s))\n", m.errs, at.path, m.zeroValue(c.typ), at.expr)
+			return
+		}
+		ctor := c.ctor.Name()
+		if q := m.f.Qualifier(c.ctor.Pkg()); q != "" {
+			ctor = q + "." + ctor
+		}
+		err := m.errVar()
+		m.printf("if _, %s := %s(%s); %s != nil {\n", err, ctor, at.expr, err)
+		m.printf("%s.Add(%s, %s)\n", m.errs, at.path, err)
+		m.printf("}\n")
 	}
 }
 
@@ -360,6 +374,15 @@ func (m *method) zeroValue(t types.Type) string {
 		}
 	}
 	return name + "(nil)"
+}
+
+// errVar names the variable holding what a constructor returned, which every
+// check of a method shares, as each declares it in an if of its own.
+func (m *method) errVar() string {
+	if m.err == "" {
+		m.err = m.scope.Name("err")
+	}
+	return m.err
 }
 
 // loopVar names the loop variable base at depth. Every loop of one depth in a

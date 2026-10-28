@@ -12,8 +12,8 @@ import (
 	"github.com/go-kanna/validate"
 )
 
-// email stands in for validated.String[rules.Email]: its UnmarshalJSON rejects
-// a value with a Coded error and leaves the field as it was.
+// email stands in for a value type of kanna-value: its UnmarshalJSON rejects a
+// value with a Coded error and leaves the field as it was.
 type email struct{ v string }
 
 func (e *email) UnmarshalJSON(data []byte) error {

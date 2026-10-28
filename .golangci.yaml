@@ -36,6 +36,8 @@ linters:
       extra-ignore-sigs:
         - validate.Errors).Err(                  # hands back what Validate collected; nothing underneath to wrap
         - ) *github.com/go-kanna/validate.Error  # makes the error rather than passing one on
+      ignore-package-globs:
+        - github.com/go-kanna/value/rule # Its errors are a rule's verdict, returned as they are, as the example's Email does.
   enable:
     - gomodguard_v2
   disable:

@@ -1,4 +1,4 @@
-// Package format uses the rules of github.com/go-kanna/validated, which this
+// Package format uses the rules of github.com/go-kanna/value/rule, which this
 // module does not require, so the emit test compares its output without
 // compiling it.
 package format

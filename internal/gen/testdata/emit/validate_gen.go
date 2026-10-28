@@ -206,6 +206,12 @@ func (x Request) Validate() error {
 		errs.Add("done_at", schedule.Since2000{}.Validate(*x.DoneAt))
 	}
 
+	if x.Due != nil {
+		if _, err := schedule.NewDeadline(*x.Due); err != nil {
+			errs.Add("due", err)
+		}
+	}
+
 	for i := range x.Shifts {
 		errs.Add(validate.Index("shifts", i), Since2000{}.Validate(x.Shifts[i]))
 	}

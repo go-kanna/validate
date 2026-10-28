@@ -78,7 +78,7 @@ func (Checked) Validate(strict bool) error { return nil }
 // Tree contains itself, and nothing in it validates itself.
 type Tree map[string]Tree
 
-// Past is a rule as go-kanna/validated writes one.
+// Past is a rule type, whose Validate accepts or rejects a time.
 type Past struct{}
 
 func (Past) Validate(t time.Time) error { return nil }
@@ -102,10 +102,10 @@ func TestPlans(t *testing.T) {
 			`Name(name): required=="" runes>=1 runes<=50`,
 			`Age(age): >=18`,
 			`Role(role): oneof("admin","member")`,
-			`Email(email): omitempty=="" rules.Email`,
+			`Email(email): omitempty=="" rule.Email`,
 			`Tags(tags): len<=5 []{runes<=20}`,
 			`Nickname(nickname): *{runes<=20}`,
-			`Avatar(avatar): required==nil *{rules.URL}`,
+			`Avatar(avatar): required==nil *{rule.URL}`,
 			`When(when): required==IsZero`,
 			`Point(point): required=={}`,
 			`Active(active): required==false`,

@@ -4,7 +4,7 @@ package format
 
 import (
 	"github.com/go-kanna/validate"
-	"github.com/go-kanna/validated/rules"
+	"github.com/go-kanna/value/rule"
 )
 
 // Validate checks x against the validate tags of Contact. It returns the
@@ -15,14 +15,14 @@ func (x Contact) Validate() error {
 	if x.Email == "" {
 		errs.Add("email", validate.Blank())
 	} else {
-		errs.Add("email", rules.Email{}.Validate(x.Email))
+		errs.Add("email", rule.Email(x.Email))
 	}
 
 	if x.Website != nil {
-		errs.Add("website", rules.URL{}.Validate(*x.Website))
+		errs.Add("website", rule.URL(*x.Website))
 	}
 
-	errs.Add("id", rules.UUID{}.Validate(string(x.ID)))
+	errs.Add("id", rule.UUID(string(x.ID)))
 
 	return errs.Err()
 }

@@ -16,9 +16,9 @@ import (
 // DecodeJSON decodes the JSON value r holds into v, which must be a non-nil
 // pointer, and reports everything wrong with it at once.
 //
-// A value whose type rejects it with a Coded error, as the types of
-// go-kanna/validated do, does not stop the decoding: the error is recorded at
-// the value's path and decoding goes on. The rejection may come from any method
+// A value whose type rejects it with a Coded error, as the value types of
+// kanna-value do, does not stop the decoding: the error is recorded at the
+// value's path and decoding goes on. The rejection may come from any method
 // encoding/json/v2 decodes a type with: UnmarshalJSONFrom, UnmarshalJSON, or
 // UnmarshalText. Then, when v has a Validate method, what it finds is added,
 // except at and under the paths decoding rejected. Those values were never set,

@@ -97,8 +97,8 @@ func (s Signup) validate(errs *validate.Errors) {
 }
 `
 
-// sinceSrc declares a rule as go-kanna/validated writes one, in a package named
-// model.
+// sinceSrc declares a rule type, whose Validate accepts or rejects a time, in a
+// package named model.
 const sinceSrc = `package model
 
 import (
@@ -196,6 +196,84 @@ type Task struct {
 	set, err := packages.Load([]string{"./..."}, packages.Config{Dir: dir})
 	if err != nil || len(set.Diags) > 0 {
 		t.Errorf("generated package does not load: %v %v", err, set.Diags)
+	}
+}
+
+// deadlineSrc declares a value type as kanna-value generates one, down to the
+// constructor that rule= calls, in a package named model.
+const deadlineSrc = `package model
+
+import (
+	"time"
+
+	"github.com/go-kanna/validate"
+)
+
+type Deadline struct{ t time.Time }
+
+func NewDeadline(t time.Time) (Deadline, error) {
+	if t.Year() < 2000 {
+		return Deadline{}, validate.FailWith("too_early", map[string]any{"year": 2000})
+	}
+	return Deadline{t: t}, nil
+}
+`
+
+// A rule= may name a value type of kanna-value, whose constructor the
+// generated code calls. A package the struct's package reaches only through
+// another is loaded in part, without the constructor, so the run loads it
+// whole.
+func TestCommand_RuleNamesAValueType(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		files map[string]string
+	}{
+		{
+			name: "imported directly",
+			files: map[string]string{
+				"model/model.go": deadlineSrc,
+				"app.go": strings.Replace(taskSrc("model.Deadline"), "import \"time\"",
+					"import (\n\t\"time\"\n\n\t\"example.com/app/model\"\n)\n\nvar _ = model.NewDeadline", 1),
+			},
+		},
+		{
+			name: "reached only through another package",
+			files: map[string]string{
+				"model/model.go": deadlineSrc,
+				"repo/repo.go":   "package repo\n\nimport \"example.com/app/model\"\n\nfunc Due(d model.Deadline) {}\n",
+				"app.go": strings.Replace(taskSrc("model.Deadline"), "import \"time\"",
+					"import (\n\t\"time\"\n\n\t\"example.com/app/repo\"\n)\n\nvar _ = repo.Due", 1),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := writeModule(t, tt.files)
+			code, stdout, stderr := run(t, dir)
+			if code != cli.ExitOK || stdout != "" || stderr != "" {
+				t.Fatalf("run = %d, stdout %q, stderr %q; want success in silence", code, stdout, stderr)
+			}
+			got := readFile(t, filepath.Join(dir, "validate_gen.go"))
+			for _, want := range []string{
+				`"example.com/app/model"`,
+				"if _, err := model.NewDeadline(*x.Done); err != nil {",
+				`errs.Add("done", err)`,
+			} {
+				if !strings.Contains(got, want) {
+					t.Errorf("validate_gen.go does not contain %q:\n%s", want, got)
+				}
+			}
+
+			set, err := packages.Load([]string{"./..."}, packages.Config{Dir: dir})
+			if err != nil || len(set.Diags) > 0 {
+				t.Errorf("generated package does not load: %v %v", err, set.Diags)
+			}
+		})
 	}
 }
 
@@ -417,7 +495,7 @@ type Contact struct {
 	}
 	for _, want := range []string{
 		"./app.go:16:6: warning: Profile has validate tags but no //kanna:validate, so they are never checked\n",
-		"./validate_gen.go: warning: imports github.com/go-kanna/validated/rules, which go.mod does not require; " +
+		"./validate_gen.go: warning: imports github.com/go-kanna/value/rule, which go.mod does not require; " +
 			"run go mod tidy\n",
 	} {
 		if !strings.Contains(stderr, want) {

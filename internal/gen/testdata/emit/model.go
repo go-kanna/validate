@@ -85,6 +85,7 @@ type Request struct {
 	ByPoint  map[Point]Item   `json:"by_point"`
 	Tree     Tree             `json:"tree"`
 	DoneAt   *time.Time       `json:"done_at"   validate:"rule=schedule.Since2000"`
+	Due      *time.Time       `json:"due"       validate:"rule=schedule.Deadline"`
 	Shifts   []time.Time      `json:"shifts"    validate:"dive,rule=Since2000"`
 	Audit
 }
