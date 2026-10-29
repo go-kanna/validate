@@ -199,8 +199,9 @@ type Task struct {
 	}
 }
 
-// deadlineSrc declares a value type as kanna-value generates one, down to the
-// constructor that rule= calls, in a package named model.
+// deadlineSrc declares a value type as kanna-value generates one, down to what
+// rule= knows it by, its accessor and its constructor, in a package named
+// model.
 const deadlineSrc = `package model
 
 import (
@@ -210,6 +211,8 @@ import (
 )
 
 type Deadline struct{ t time.Time }
+
+func (d Deadline) Time() time.Time { return d.t }
 
 func NewDeadline(t time.Time) (Deadline, error) {
 	if t.Year() < 2000 {

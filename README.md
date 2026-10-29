@@ -139,8 +139,8 @@ Where it differs from go-playground:
 - `omitempty` comes first among the rules of its level.
 
 `rule=Type` applies the rule of `Type` to the field's value, or to each element after `dive`. `Type` is a value type of
-[kanna-value](#with-kanna-value), whose constructor `NewType(T) (Type, error)` holds a value to its rule, or a type with
-a method `Validate(T) error`, called on its zero value. A bare `Type` is one of the struct's package. `pkg.Type` names
+[kanna-value](#with-kanna-value), known by the shape kanna-value gives it, whose constructor `NewType(T) (Type, error)`
+holds a value to its rule, or a type with a method `Validate(T) error`, called on its zero value. A bare `Type` is one of the struct's package. `pkg.Type` names
 the package by its name, among the packages of your module and those the struct's package imports, directly or not;
 `a/pkg.Type`, with as much of the import path as it takes, tells two packages of one name apart. The struct's file need
 not import it, since the generated file does. The generated code records at the field what the constructor or
