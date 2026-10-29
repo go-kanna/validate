@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/go-kanna/internal/diag"
+	"github.com/go-kanna/internal/packages"
 	"github.com/go-kanna/internal/scan"
 )
 
@@ -134,6 +135,10 @@ func (p planner) plan(t target) (plan, []diag.Diag) {
 	pl := plan{target: t}
 	var diags []diag.Diag
 	for i, f := range t.Fields {
+		if packages.Invalid(f.Type) {
+			diags = append(diags, packages.NotTypeChecked(f.Pos))
+			continue
+		}
 		at := site{pkg: own, refs: refs, fields: slices.Delete(slices.Clone(fields), i, i+1)}
 		fp, errs := p.field(f, at)
 		for _, err := range errs {
