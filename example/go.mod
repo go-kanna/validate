@@ -10,12 +10,12 @@ tool (
 )
 
 require (
-	github.com/go-kanna/validate v0.0.5
-	github.com/go-kanna/value v0.0.2
+	github.com/go-kanna/validate v0.0.6
+	github.com/go-kanna/value v0.0.3
 )
 
 require (
-	github.com/go-kanna/internal v0.0.6 // indirect
+	github.com/go-kanna/internal v0.0.9 // indirect
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/tools v0.52.0 // indirect
