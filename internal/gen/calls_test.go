@@ -256,3 +256,45 @@ func TestCommand_RegeneratesOutputSetAsideUnderCallers(t *testing.T) {
 		})
 	}
 }
+
+func TestCommand_NestsAStructMarkedInAnotherPackage(t *testing.T) {
+	t.Parallel()
+
+	const (
+		address = "package user\n\n//kanna:validate\ntype Address struct {\n" +
+			"\tZip string `json:\"zip\" validate:\"required\"`\n}\n"
+		request = "package api\n\nimport \"example.com/app/user\"\n\n//kanna:validate\ntype Request struct {\n" +
+			"\tName    string       `json:\"name\" validate:\"required\"`\n\tAddress user.Address `json:\"address\"`\n}\n"
+		nest = "x.Address.Validate()"
+	)
+
+	// go generate ./... may run api before user has its Validate.
+	t.Run("before its package is generated", func(t *testing.T) {
+		t.Parallel()
+
+		dir := writeModule(t, map[string]string{"user/user.go": address, "api/api.go": request})
+		if code, _, stderr := run(t, filepath.Join(dir, "api")); code != cli.ExitOK || stderr != "" {
+			t.Fatalf("exit %d, stderr %q", code, stderr)
+		}
+		if got := readFile(t, filepath.Join(dir, "api", "validate_gen.go")); !strings.Contains(got, nest) {
+			t.Errorf("api/validate_gen.go lacks %s:\n%s", nest, got)
+		}
+	})
+
+	// user's own run has yet to remove the Validate an earlier one wrote.
+	t.Run("marked no more", func(t *testing.T) {
+		t.Parallel()
+
+		dir := writeModule(t, map[string]string{"user/user.go": address, "api/api.go": request})
+		if code, _, stderr := run(t, filepath.Join(dir, "user")); code != cli.ExitOK {
+			t.Fatalf("user: exit %d, stderr %q", code, stderr)
+		}
+		writeFile(t, filepath.Join(dir, "user", "user.go"), strings.Replace(address, "//kanna:validate\n", "", 1))
+		if code, _, stderr := run(t, filepath.Join(dir, "api")); code != cli.ExitOK || stderr != "" {
+			t.Fatalf("api: exit %d, stderr %q", code, stderr)
+		}
+		if got := readFile(t, filepath.Join(dir, "api", "validate_gen.go")); strings.Contains(got, nest) {
+			t.Errorf("api/validate_gen.go holds %s:\n%s", nest, got)
+		}
+	})
+}

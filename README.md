@@ -294,7 +294,9 @@ with what it is about to write in place, and writes nothing while their code doe
 missing method hid is reported then, such as passing what `Validate` returns where it does not fit.
 
 A package whose structs have all lost `//kanna:validate` has its `validate_gen.go` removed, unless code in the packages
-the run loads still calls their `Validate`; a file of that name without the generated-code header is never touched.
+the run loads still calls their `Validate`; a file of that name without the generated-code header is never touched. The
+`go generate` that removes it ends with `open ...: no such file or directory`, from go generate itself, which lists a
+package's files before it runs the generators; the file is gone as it should be.
 
 ## Example
 
