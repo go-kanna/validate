@@ -2,6 +2,8 @@ package gen
 
 import (
 	"errors"
+	"go/ast"
+	"go/parser"
 	"go/token"
 	"go/types"
 	"path/filepath"
@@ -9,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/go-kanna/internal/diag"
+	"github.com/go-kanna/internal/directive"
 	"github.com/go-kanna/internal/packages"
 	"github.com/go-kanna/internal/scan"
 )
@@ -97,6 +100,9 @@ type planner struct {
 	// refs is where a qualified rule= looks for its package, besides among
 	// what the struct's package imports.
 	refs refScope
+
+	// marks caches what marked has read, by type.
+	marks map[*types.TypeName]bool
 }
 
 // plans decides what the Validate method of each target checks. rewritten
@@ -104,7 +110,13 @@ type planner struct {
 // rule= looks besides among what the struct's package imports. A target with a
 // rule that does not apply is left out, and said why.
 func plans(fset *token.FileSet, targets []target, rewritten map[string]bool, refs refScope) ([]plan, []diag.Diag) {
-	p := planner{fset: fset, targets: make(map[*types.TypeName]bool, len(targets)), rewritten: rewritten, refs: refs}
+	p := planner{
+		fset:      fset,
+		targets:   make(map[*types.TypeName]bool, len(targets)),
+		rewritten: rewritten,
+		refs:      refs,
+		marks:     make(map[*types.TypeName]bool),
+	}
 	for _, t := range targets {
 		p.targets[t.Named.Obj()] = true
 	}
@@ -312,8 +324,14 @@ func cannotTellEmpty(l level, t types.Type, at site) *ruleError {
 
 // hasValidate reports whether the generated code can call Validate() error on
 // a value of type t.
+//
+// A struct of another package marked //kanna:validate has it once that
+// package's own run writes it, which go generate ./... may run after this one,
+// so the mark decides, and an earlier run's output there counts only for what
+// is marked still.
 func (p planner) hasValidate(t types.Type) bool {
-	if named, ok := types.Unalias(t).(*types.Named); ok && p.targets[named.Obj()] {
+	if named, ok := types.Unalias(t).(*types.Named); ok &&
+		(p.targets[named.Obj()] || p.elsewhere(named.Obj()) && p.marked(named.Obj())) {
 		return true
 	}
 
@@ -328,10 +346,63 @@ func (p planner) hasValidate(t types.Type) bool {
 		return false
 	}
 
-	// An earlier run's output in a package this run rewrites keeps only the
-	// methods of today's targets, which the check above has found already.
-	file := filepath.Base(p.fset.Position(fn.Pos()).Filename)
-	return fn.Pkg() == nil || !p.rewritten[fn.Pkg().Path()] || file != outputFile
+	// An earlier run's output keeps only the methods of what is marked: in a
+	// package this run rewrites, today's targets, and elsewhere what is marked
+	// still, which the check above has found already, but for a method
+	// promoted from a struct it embeds.
+	if filepath.Base(p.fset.Position(fn.Pos()).Filename) != outputFile {
+		return true
+	}
+	recvType := fn.Signature().Recv().Type()
+	if ptr, isPtr := recvType.(*types.Pointer); isPtr {
+		recvType = ptr.Elem()
+	}
+	recv, ok := types.Unalias(recvType).(*types.Named)
+	return ok && (p.targets[recv.Obj()] || p.elsewhere(recv.Obj()) && p.marked(recv.Obj()))
+}
+
+// elsewhere reports whether obj is declared in a package this run does not
+// rewrite.
+func (p planner) elsewhere(obj *types.TypeName) bool {
+	return obj.Pkg() != nil && !p.rewritten[obj.Pkg().Path()]
+}
+
+// marked reports whether the declaration of obj carries //kanna:validate,
+// reading the file it is in: a package loaded from export data has no syntax.
+func (p planner) marked(obj *types.TypeName) bool {
+	if marked, ok := p.marks[obj]; ok {
+		return marked
+	}
+	marked := false
+	if path := p.fset.Position(obj.Pos()).Filename; path != "" {
+		fset := token.NewFileSet()
+		if f, err := parser.ParseFile(fset, path, nil, parser.ParseComments|parser.SkipObjectResolution); err == nil {
+			marked = declMarked(fset, f, obj.Name())
+		}
+	}
+	p.marks[obj] = marked
+	return marked
+}
+
+// declMarked reports whether f declares the type name with //kanna:validate.
+func declMarked(fset *token.FileSet, f *ast.File, name string) bool {
+	for _, decl := range f.Decls {
+		gd, ok := decl.(*ast.GenDecl)
+		if !ok || gd.Tok != token.TYPE {
+			continue
+		}
+		for _, spec := range gd.Specs {
+			if ts, ok := spec.(*ast.TypeSpec); ok && ts.Name.Name == name {
+				doc := ts.Doc
+				if doc == nil && len(gd.Specs) == 1 {
+					doc = gd.Doc
+				}
+				d, _ := directive.Find(fset, doc, directiveKey)
+				return d.Found
+			}
+		}
+	}
+	return false
 }
 
 // jsonName returns the name encoding/json gives f, and whether its json tag
