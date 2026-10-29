@@ -170,6 +170,21 @@ func TestErrors_UnwrapReachesTheRulesError(t *testing.T) {
 	}
 }
 
+// FieldError is what go-kanna/i18n renders, through the methods it asks for.
+var _ interface {
+	Path() string
+	Code() string
+	Params() map[string]any
+} = validate.FieldError{}
+
+func TestFieldError_Path(t *testing.T) {
+	t.Parallel()
+
+	if got := (validate.FieldError{Field: "tags[1]"}).Path(); got != "tags[1]" {
+		t.Errorf("Path() = %q, want %q", got, "tags[1]")
+	}
+}
+
 func TestFieldError_Code(t *testing.T) {
 	t.Parallel()
 

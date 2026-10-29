@@ -27,6 +27,12 @@ type FieldError struct {
 	Err error
 }
 
+// Path returns Field. It is the method go-kanna/i18n renders an error by,
+// together with Code and Params, to name the field in a message.
+func (e FieldError) Path() string {
+	return e.Field
+}
+
 // Code returns the code of Err, or "invalid" when Err carries none.
 func (e FieldError) Code() string {
 	if c, ok := errors.AsType[Coded](e.Err); ok {
