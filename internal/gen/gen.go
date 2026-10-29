@@ -37,7 +37,7 @@ func Command() cli.Command[config] {
 }
 
 func run(dir string, cfg config, patterns []string) ([]output.Change, []diag.Diag) {
-	set, stop := load(dir, cfg.tags, patterns)
+	set, deferred, stop := load(dir, cfg.tags, patterns)
 	if stop != nil {
 		return nil, stop
 	}
@@ -63,14 +63,20 @@ func run(dir string, cfg config, patterns []string) ([]output.Change, []diag.Dia
 			if len(all) == 0 {
 				all = []string{"."}
 			}
-			if set, stop = load(dir, cfg.tags, append(slices.Clip(all), extra...)); stop != nil {
+			if set, deferred, stop = load(dir, cfg.tags, append(slices.Clip(all), extra...)); stop != nil {
 				return nil, stop
 			}
 		}
 	}
 
 	changes, diags := generate(set, roots, module)
-	if !diag.HasErrors(diags) && !slices.ContainsFunc(changes, func(c output.Change) bool { return !c.Remove }) {
+	if diag.HasErrors(diags) {
+		return nil, stopped(set, roots, deferred, diags)
+	}
+	if rds := packages.Recheck(set, changes); len(rds) > 0 {
+		return nil, slices.Concat(diags, rds, set.SetAsideWarnings())
+	}
+	if !slices.ContainsFunc(changes, func(c output.Change) bool { return !c.Remove }) {
 		// Nothing to stop for: a go:generate line left behind does no harm. The
 		// packages are named by path, as go generate ./... runs every one of
 		// them in a "." of its own.
@@ -81,25 +87,36 @@ func run(dir string, cfg config, patterns []string) ([]output.Change, []diag.Dia
 		diags = append(diags, diag.Warningf(token.Position{},
 			"no struct is marked //kanna:%s in %s", directiveKey, strings.Join(in, ", ")))
 	}
-	return changes, append(set.Diags, diags...)
+	return changes, diags
 }
 
 // load loads the packages matching patterns, and says why the run stops when
-// it cannot go on with them.
-func load(dir, tags string, patterns []string) (packages.Set, []diag.Diag) {
+// it cannot go on with them. Code calling a Validate method does not compile
+// before the run writes it, so a type error of a package loaded does not stop
+// the run: it is deferred, for packages.Recheck to tell, once the output is in
+// place, whether it remains.
+func load(dir, tags string, patterns []string) (set packages.Set, deferred, stop []diag.Diag) {
 	set, err := packages.Load(patterns, packages.Config{Dir: dir, Tags: tags, Regenerated: []string{outputFile}})
 	if err != nil {
-		return set, []diag.Diag{diag.Errorf(token.Position{}, "%v", err)}
+		return set, nil, []diag.Diag{diag.Errorf(token.Position{}, "%v", err)}
 	}
-	if !diag.HasErrors(set.Diags) {
-		return set, nil
+	blocking, deferred := set.Split()
+	if diag.HasErrors(blocking) {
+		return set, nil, append(blocking, set.SetAsideWarnings()...)
 	}
-	stop := set.Diags
-	for _, path := range set.SetAside {
-		stop = append(stop, diag.Warningf(token.Position{Filename: path},
-			"set aside because it no longer compiles; it is regenerated once the errors above are fixed"))
+	return set, deferred, nil
+}
+
+// stopped returns what a run that cannot generate reports, leaving out the
+// type errors that say only that a Validate method it writes is missing.
+func stopped(set packages.Set, roots map[string]bool, deferred, diags []diag.Diag) []diag.Diag {
+	pkgs := slices.DeleteFunc(slices.Clone(set.Packages), func(p *packages.Package) bool { return !roots[p.PkgPath] })
+	found, _ := targets(set.Fset, scan.Structs(pkgs))
+	written := make(map[string]bool, len(found))
+	for _, t := range found {
+		written[t.PkgPath+"."+t.Name+".Validate"] = true
 	}
-	return set, stop
+	return packages.Stopped(deferred, diags, set.Pending(written))
 }
 
 // generate works out the changes for the packages of set that roots names: the

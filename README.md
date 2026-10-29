@@ -289,8 +289,12 @@ $ go generate ./...
 warning: no struct is marked //kanna:validate in example.com/app/user
 ```
 
-A package whose structs have all lost `//kanna:validate` has its `validate_gen.go` removed; a file of that name without
-the generated-code header is never touched.
+Code may call `Validate` before the first run has written it. kanna-validate type-checks the packages it loads once more
+with what it is about to write in place, and writes nothing while their code does not compile with it: a mistake the
+missing method hid is reported then, such as passing what `Validate` returns where it does not fit.
+
+A package whose structs have all lost `//kanna:validate` has its `validate_gen.go` removed, unless code in the packages
+the run loads still calls their `Validate`; a file of that name without the generated-code header is never touched.
 
 ## Example
 
