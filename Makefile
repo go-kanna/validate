@@ -32,3 +32,8 @@ clean:
 .PHONY: example
 example:
 	cd example && go generate ./... && go vet ./... && go run .
+
+# BENCHFLAGS tunes the run, such as BENCHFLAGS=-count=6 for benchstat.
+.PHONY: bench
+bench:
+	cd bench && go generate ./... && go test -bench . $(BENCHFLAGS) ./...

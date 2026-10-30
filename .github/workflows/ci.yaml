@@ -33,6 +33,12 @@ jobs:
           version: v2.15.0
           working-directory: example
 
+      - name: Lint the benchmark
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.15.0
+          working-directory: bench
+
   test:
     strategy:
       matrix:
@@ -88,5 +94,27 @@ jobs:
             echo "::error::the example is stale; run 'make example' and commit the result"
             git status --porcelain -- example
             git diff -- example
+            exit 1
+          fi
+
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # Once is enough to tell the benchmark still builds and compares the same work.
+      - name: Regenerate the benchmark and run it once
+        run: make bench BENCHFLAGS=-benchtime=1x
+
+      - name: Check the benchmark is up to date
+        run: |
+          if [ -n "$(git status --porcelain -- bench)" ]; then
+            echo "::error::the benchmark is stale; run 'make bench' and commit the result"
+            git status --porcelain -- bench
+            git diff -- bench
             exit 1
           fi
