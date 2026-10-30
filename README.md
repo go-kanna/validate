@@ -305,12 +305,35 @@ package's files before it runs the generators; the file is gone as it should be
 an empty one, one the hook rejects, and malformed JSON — and prints the response each gets. CI regenerates it and fails
 if the output would change.
 
+## Performance
+
+[`bench`](bench) validates a request like the one in [Use](#use) with the generated `Validate` and with
+go-playground/validator, both reading the same tags; `len=8` stands in for `pattern=`, which go-playground does not
+have. go-playground is set up to report what kanna-validate does — a required struct must not be its zero value, and a
+field goes by its JSON name — and a test fails unless the two find the same fields broken.
+
+| Request              | Validator                        | ns/op | B/op | allocs/op |
+|----------------------|----------------------------------|------:|-----:|----------:|
+| valid                | kanna-validate                   |    18 |    0 |         0 |
+| valid                | go-playground/validator v10.30.5 |   547 |  432 |        18 |
+| seven fields broken  | kanna-validate                   |   553 | 2432 |        26 |
+| seven fields broken  | go-playground/validator v10.30.5 |  1004 | 2210 |        51 |
+
+The median of 10 runs with Go 1.27.3 on an Apple M5 Pro. A valid request costs the `if`s and allocates nothing; a
+broken one costs the errors it reports, each built with its code and params.
+
+```sh
+make bench                       # run it once
+make bench BENCHFLAGS=-count=10  # often enough for benchstat
+```
+
 ## Development
 
 ```sh
 make test       # unit tests
 make lint       # golangci-lint
 make example    # regenerate the example, then build and run it
+make bench      # regenerate the benchmark, then run it
 ```
 
 ## License
