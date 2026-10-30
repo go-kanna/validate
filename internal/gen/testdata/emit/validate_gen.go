@@ -48,8 +48,15 @@ func (x Request) Validate() error {
 		errs.Add("quantity", validate.LessThanOrEqualTo[uint16](1000))
 	}
 
-	if x.Score <= 0 {
+	if !(x.Score > 0) {
 		errs.Add("score", validate.GreaterThan[float64](0))
+	}
+
+	if !(x.Ratio >= 0) {
+		errs.Add("ratio", validate.GreaterThanOrEqualTo[float32](0))
+	}
+	if !(x.Ratio <= 1) {
+		errs.Add("ratio", validate.LessThanOrEqualTo[float32](1))
 	}
 
 	if x.Role == "" {

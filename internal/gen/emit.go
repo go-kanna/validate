@@ -267,7 +267,13 @@ func (m *method) check(c check, t types.Type, at place) {
 		m.printf("if %s %s %d {\n%s\n}\n", n, breaking[c.op], c.bound,
 			m.add(at.path, fmt.Sprintf("%s(%d)", lengthErrors[c.op], c.bound)))
 	case compareCheck:
-		m.printf("if %s %s %s {\n%s\n}\n", at.expr, breaking[c.op], c.bound,
+		cond := at.expr + " " + breaking[c.op].String() + " " + c.bound
+		if isFloat(t) {
+			// NaN compares false with everything, so it meets neither a
+			// requirement nor its opposite: the requirement itself is negated.
+			cond = "!(" + at.expr + " " + c.op.String() + " " + c.bound + ")"
+		}
+		m.printf("if %s {\n%s\n}\n", cond,
 			m.add(at.path, compareErrors[c.op]+m.typeArg(c.bound, t)+"("+c.bound+")"))
 	case oneOfCheck:
 		conds := make([]string, len(c.values))

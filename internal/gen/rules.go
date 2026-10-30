@@ -440,6 +440,12 @@ func fits(v constant.Value, b *types.Basic) bool {
 	return exact && lo <= i && i <= -(lo+1)
 }
 
+// isFloat reports whether t is a floating-point number.
+func isFloat(t types.Type) bool {
+	b, ok := t.Underlying().(*types.Basic)
+	return ok && b.Info()&types.IsFloat != 0
+}
+
 // shape is what a rule cares about in a type: what its underlying type is.
 type shape int
 

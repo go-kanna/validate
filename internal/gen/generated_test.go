@@ -3,6 +3,8 @@ package gen_test
 import (
 	"encoding/json"
 	"errors"
+	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -207,4 +209,69 @@ func TestGenerated_CountKeepsTheFieldsType(t *testing.T) {
 	if count, ok := errs[1].Params()["count"].(float64); !ok || count != 0 {
 		t.Errorf("count of score = %#v, want float64(0)", errs[1].Params()["count"])
 	}
+}
+
+// NaN compares false with everything, so it meets no bound: each comparison
+// rule reports it, as an infinity beyond the bound.
+func TestGenerated_FloatBounds(t *testing.T) {
+	t.Parallel()
+
+	nan32 := float32(math.NaN())
+	tests := []struct {
+		name  string
+		score float64
+		ratio float32
+		want  string
+	}{
+		{name: "NaN", score: math.NaN(), ratio: nan32,
+			want: `{"score":[{"error":"greater_than","count":0}],` +
+				`"ratio":[{"error":"greater_than_or_equal_to","count":0},{"error":"less_than_or_equal_to","count":1}]}`},
+		{name: "infinities", score: math.Inf(-1), ratio: float32(math.Inf(1)),
+			want: `{"score":[{"error":"greater_than","count":0}],"ratio":[{"error":"less_than_or_equal_to","count":1}]}`},
+		{name: "the bounds", score: math.SmallestNonzeroFloat64, ratio: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			r := validRequest()
+			r.Score, r.Ratio = tt.score, tt.ratio
+			err := r.Validate()
+			if tt.want == "" {
+				if err != nil {
+					t.Fatalf("Validate() = %v, want nil", err)
+				}
+				return
+			}
+			got, merr := json.Marshal(err)
+			if merr != nil {
+				t.Fatalf("Marshal() error = %v", merr)
+			}
+			if string(got) != tt.want {
+				t.Errorf("Validate() reported\n got  %s\n want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+// FuzzGenerated_FloatBound checks gt=0 on every bit pattern of a float64: it
+// is broken exactly when x > 0 does not hold.
+func FuzzGenerated_FloatBound(f *testing.F) {
+	seeds := []float64{
+		0, math.Copysign(0, -1), 1, -1, math.NaN(), math.Inf(1), math.Inf(-1), math.SmallestNonzeroFloat64,
+	}
+	for _, x := range seeds {
+		f.Add(math.Float64bits(x))
+	}
+	f.Fuzz(func(t *testing.T, bits uint64) {
+		x := math.Float64frombits(bits)
+		r := validRequest()
+		r.Score = x
+
+		errs, _ := errors.AsType[validate.Errors](r.Validate())
+		broken := slices.ContainsFunc(errs, func(e validate.FieldError) bool { return e.Field == "score" })
+		if broken != !(x > 0) {
+			t.Errorf("score %v (%#x) reported %t, want %t", x, bits, broken, !(x > 0))
+		}
+	})
 }
