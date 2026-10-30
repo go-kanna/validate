@@ -319,8 +319,10 @@ field goes by its JSON name — and a test fails unless the two find the same fi
 | seven fields broken  | kanna-validate                   |   231 | 1032 |        16 |
 | seven fields broken  | go-playground/validator v10.30.5 |   989 | 2210 |        51 |
 
-The median of 10 runs with Go 1.27.3 on an Apple M5 Pro. A valid request costs the `if`s and allocates nothing; a
-broken one costs the errors it reports, each built with its code and params.
+The median of 10 runs with Go 1.27.3 on an Apple M5 Pro. The generated `Validate` checks a valid request about 30 times
+as fast as go-playground, and a broken one about 4 times as fast with 53% fewer bytes and 69% fewer allocations. A
+valid request costs the `if`s and allocates nothing; a broken one costs the errors it reports, each built with its code
+and params.
 
 ```sh
 make bench                       # run it once
