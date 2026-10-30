@@ -2,10 +2,10 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/gabriel-vasile/mimetype v1.4.15 h1:05iP/CYtZ/w455R/KZM6rZ5ieAdh99UPtd+d3YzLmaI=
 github.com/gabriel-vasile/mimetype v1.4.15/go.mod h1:azpTcoLcDZRNgFou5j+APrqQx9HqVPWa6ijYQIIVswQ=
-github.com/go-kanna/internal v0.0.13 h1:ZeUjIlmsX9XOm2eMVApYgtpY64UyaxmYrTv2JVdSfZo=
-github.com/go-kanna/internal v0.0.13/go.mod h1:Df477EkeFmw5w4hFNoBGUZfZJfgKJnaemuReERxK7to=
-github.com/go-kanna/validate v0.0.8 h1:vTq+XhFb9/lKID9YJx9budOAx78pqb8qUpLEHSAvsQs=
-github.com/go-kanna/validate v0.0.8/go.mod h1:K+HuK1IXbw/73RbpcUnIxzeuwrC6h1nOVbZGvq9QRMc=
+github.com/go-kanna/internal v0.0.14 h1:LR4BhfUPHGnIiRKyUbp12HAc41Xcd4RFVuBegBS4WBU=
+github.com/go-kanna/internal v0.0.14/go.mod h1:Df477EkeFmw5w4hFNoBGUZfZJfgKJnaemuReERxK7to=
+github.com/go-kanna/validate v0.0.9 h1:m702iQMMXNBZXVr7Zj2FTtVZ+OKPbI1p0VPbuhLSwdE=
+github.com/go-kanna/validate v0.0.9/go.mod h1:Ju+o6C3C+rhB0aGF07osnHsSvIKUax12QOcpLJOlBwM=
 github.com/go-playground/assert/v2 v2.2.0 h1:JvknZsQTYeFEAhQwI4qEt9cyV5ONwRHC+lYKSsYSR8s=
 github.com/go-playground/assert/v2 v2.2.0/go.mod h1:VDjEfimB/XKnb+ZQfWdccd7VUvScMdVu0Titje2rxJ4=
 github.com/go-playground/locales v0.14.1 h1:EWaQ/wswjilfKLTECiXz7Rh+3BjFhfDFKv/oXslEjJA=
