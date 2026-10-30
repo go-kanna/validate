@@ -8,6 +8,7 @@ updates:
   - package-ecosystem: gomod
     directories:
       - /
+      - /bench
       - /example
     schedule:
       interval: weekly
