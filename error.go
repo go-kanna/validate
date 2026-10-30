@@ -29,6 +29,11 @@ type Coded interface {
 type Error struct {
 	code   string
 	params map[string]any
+
+	// key and value are the one param of a built-in rule, kept out of params
+	// so that reporting it builds no map. key is empty when there is none.
+	key   string
+	value any
 }
 
 // Fail returns an Error with code.
@@ -49,13 +54,16 @@ func (e *Error) Code() string {
 
 // Params returns a copy of the params, or nil when there are none.
 func (e *Error) Params() map[string]any {
+	if e.key != "" {
+		return map[string]any{e.key: e.value}
+	}
 	return maps.Clone(e.params)
 }
 
 // Error formats the code and then the params in key order, such as
 // "validate: too_long (count=50)".
 func (e *Error) Error() string {
-	return "validate: " + describe(e.code, e.params)
+	return "validate: " + describe(e.code, e.Params())
 }
 
 // number is what a numeric rule compares against. The count it reports keeps
@@ -107,14 +115,14 @@ func Inclusion() *Error { return Fail("inclusion") }
 // Confirmation reports a value that does not match the field it confirms, whose
 // JSON name is attribute.
 func Confirmation(attribute string) *Error {
-	return &Error{code: "confirmation", params: map[string]any{"attribute": attribute}}
+	return &Error{code: "confirmation", key: "attribute", value: attribute}
 }
 
 // Invalid reports a value in the wrong format.
 func Invalid() *Error { return Fail("invalid") }
 
 func withCount(code string, count any) *Error {
-	return &Error{code: code, params: map[string]any{"count": count}}
+	return &Error{code: code, key: "count", value: count}
 }
 
 // describe formats a code and its params in key order, such as

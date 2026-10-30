@@ -315,9 +315,9 @@ field goes by its JSON name — and a test fails unless the two find the same fi
 | Request              | Validator                        | ns/op | B/op | allocs/op |
 |----------------------|----------------------------------|------:|-----:|----------:|
 | valid                | kanna-validate                   |    18 |    0 |         0 |
-| valid                | go-playground/validator v10.30.5 |   547 |  432 |        18 |
-| seven fields broken  | kanna-validate                   |   553 | 2432 |        26 |
-| seven fields broken  | go-playground/validator v10.30.5 |  1004 | 2210 |        51 |
+| valid                | go-playground/validator v10.30.5 |   539 |  432 |        18 |
+| seven fields broken  | kanna-validate                   |   231 | 1032 |        16 |
+| seven fields broken  | go-playground/validator v10.30.5 |   989 | 2210 |        51 |
 
 The median of 10 runs with Go 1.27.3 on an Apple M5 Pro. A valid request costs the `if`s and allocates nothing; a
 broken one costs the errors it reports, each built with its code and params.
