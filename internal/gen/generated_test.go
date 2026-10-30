@@ -257,7 +257,10 @@ func TestGenerated_FloatBounds(t *testing.T) {
 // FuzzGenerated_FloatBound checks gt=0 on every bit pattern of a float64: it
 // is broken exactly when x > 0 does not hold.
 func FuzzGenerated_FloatBound(f *testing.F) {
-	for _, x := range []float64{0, math.Copysign(0, -1), 1, -1, math.NaN(), math.Inf(1), math.Inf(-1), math.SmallestNonzeroFloat64} {
+	seeds := []float64{
+		0, math.Copysign(0, -1), 1, -1, math.NaN(), math.Inf(1), math.Inf(-1), math.SmallestNonzeroFloat64,
+	}
+	for _, x := range seeds {
 		f.Add(math.Float64bits(x))
 	}
 	f.Fuzz(func(t *testing.T, bits uint64) {
