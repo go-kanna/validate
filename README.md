@@ -134,6 +134,8 @@ Where it differs from go-playground:
   empty slice that is not nil is there; bound its length with `min=1`.
 - A nil pointer skips every rule but `required`: a `*string` tagged `max=20` accepts nil, one tagged `required,max=20`
   does not.
+- A floating-point NaN breaks every comparison it is held to: `min=0` and `max=100` both report it. The generated code
+  negates the requirement, `!(x >= 0)`, as `x < 0` would let NaN through.
 - `pattern=` takes the rest of the tag, commas included, so it comes last. The tag value is a Go string literal, so a
   backslash is written `\\`; a tag that does not unquote stops generation instead of being skipped in silence.
 - `omitempty` comes first among the rules of its level.
