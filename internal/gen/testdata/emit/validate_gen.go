@@ -212,6 +212,12 @@ func (x Request) Validate() error {
 		}
 	}
 
+	if x.Shift != "" {
+		if _, err := schedule.NewShift(x.Shift); err != nil {
+			errs.Add("shift", err)
+		}
+	}
+
 	for i := range x.Shifts {
 		errs.Add(validate.Index("shifts", i), Since2000{}.Validate(x.Shifts[i]))
 	}

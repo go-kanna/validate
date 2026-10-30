@@ -56,6 +56,19 @@ func (l level) Int() int { return l.n }
 
 func newLevel(n int) (level, error) { return level{n: n}, nil }
 
+// Status is an enum as kanna-value generates one, down to what rule= knows it
+// by: its constants and its constructor.
+type Status string
+
+const StatusOpen Status = "open"
+
+func NewStatus(v string) (Status, error) { return Status(v), nil }
+
+// Bare has constants, but no constructor, so rule= cannot hold a value to them.
+type Bare string
+
+const BareA Bare = "a"
+
 // Plain has a constructor of kanna-value's kind, but no accessor, so it is no
 // value type.
 type Plain struct{ t time.Time }
@@ -154,6 +167,7 @@ func TestResolveRule(t *testing.T) {
 		{rule: "rule=Deadline", field: "When", want: "rule=test.Deadline via NewDeadline"},
 		{rule: "rule=test.Deadline", field: "When", want: "rule=test.Deadline via NewDeadline"},
 		{rule: "rule=level", field: "I", want: "rule=test.level via newLevel"},
+		{rule: "rule=Status", field: "S", want: "rule=test.Status via NewStatus"},
 		{rule: "rule=Past", field: "When", want: "rule=test.Past"},
 		{rule: "rule=test.Past", field: "When", want: "rule=test.Past"},
 		{rule: "rule=Even", field: "I", want: "rule=test.Even"},
@@ -262,6 +276,9 @@ func TestResolveRule_Errors(t *testing.T) {
 			wantErr: "rule=Plain has neither a constructor NewPlain(time.Time) (Plain, error)",
 		},
 		{rule: "rule=Deadline", field: "S", wantErr: "rule=Deadline holds time.Time, not string"},
+		{rule: "rule=Status", field: "Kind", wantErr: "rule=Status takes a string, not Role"},
+		{rule: "rule=Status", field: "I", wantErr: "rule=Status takes a string, not int"},
+		{rule: "rule=Bare", field: "S", wantErr: "rule=Bare has neither a constructor NewBare(string) (Bare, error)"},
 		{
 			rule: "rule=Strict", field: "S",
 			wantErr: "nor a method Validate(string) error", wantHint: "its Validate has a pointer receiver",

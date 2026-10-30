@@ -143,16 +143,17 @@ func TestGenerated(t *testing.T) {
 		},
 		{
 			// The rules' own codes and params come through, from a rule type and
-			// from the constructor of a value type alike.
+			// from the constructor of a value type or an enum alike.
 			name: "rules",
 			modify: func(r *emit.Request) {
 				before := time.Date(1999, 12, 31, 0, 0, 0, 0, time.UTC)
 				r.DoneAt = &before
 				r.Due = &before
+				r.Shift = "evening"
 				r.Shifts = []time.Time{time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC), before}
 			},
 			want: `{"done_at":[{"error":"too_early","year":2000}],"due":[{"error":"too_early","year":2000}],` +
-				`"shifts[1]":[{"error":"too_early","year":2000}]}`,
+				`"shift":[{"error":"inclusion"}],"shifts[1]":[{"error":"too_early","year":2000}]}`,
 		},
 		{
 			name:   "hook",

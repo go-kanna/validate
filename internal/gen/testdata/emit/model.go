@@ -86,6 +86,7 @@ type Request struct {
 	Tree     Tree             `json:"tree"`
 	DoneAt   *time.Time       `json:"done_at"   validate:"rule=schedule.Since2000"`
 	Due      *time.Time       `json:"due"       validate:"rule=schedule.Deadline"`
+	Shift    string           `json:"shift"     validate:"omitempty,rule=schedule.Shift"`
 	Shifts   []time.Time      `json:"shifts"    validate:"dive,rule=Since2000"`
 	Audit
 }

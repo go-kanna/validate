@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-kanna/internal/enumtype"
 	"github.com/go-kanna/internal/suggest"
 	"github.com/go-kanna/internal/valuetype"
 )
@@ -310,8 +311,9 @@ func format(funcName string) resolver {
 
 // typeRule resolves rule=Type, which runs the rule of Type on the value. Type
 // is a value type of kanna-value, whose constructor NewType(T) (Type, error)
-// holds a T to the rule, or a type whose Validate(T) error accepts or rejects a
-// T, called on its zero value.
+// holds a T to the rule, an enum of kanna-value, whose constructor
+// NewType(string) (Type, error) accepts only its constants, or a type whose
+// Validate(T) error accepts or rejects a T, called on its zero value.
 func typeRule(r rule, t types.Type, at site) (check, error) {
 	if err := needsValue(r); err != nil {
 		return nil, err
@@ -334,6 +336,12 @@ func typeRule(r rule, t types.Type, at site) (check, error) {
 			return nil, ruleErrorf("rule=%s holds %s, not %s", r.param, at.typeString(v.Held), at.typeString(t))
 		}
 		return ruleCheck{typ: typ, ctor: v.Constructor}, nil
+	}
+	if e, ok := enumtype.Of(typ); ok && e.Constructor != nil {
+		if !types.AssignableTo(t, types.Typ[types.String]) {
+			return nil, ruleErrorf("rule=%s takes a string, not %s", r.param, at.typeString(t))
+		}
+		return ruleCheck{typ: typ, ctor: e.Constructor}, nil
 	}
 
 	m, _, indirect := types.LookupFieldOrMethod(typ, false, nil, "Validate")
@@ -358,10 +366,13 @@ func typeRule(r rule, t types.Type, at site) (check, error) {
 }
 
 // isRule reports whether rule= can name the type obj names, as far as what is
-// loaded of its package tells: a value type with its constructor, or a type
-// with a rule's Validate.
+// loaded of its package tells: a value type or an enum with its constructor, or
+// a type with a rule's Validate.
 func isRule(obj *types.TypeName) bool {
 	if v, ok := valuetype.Of(obj.Type()); ok && v.Constructor != nil {
+		return true
+	}
+	if e, ok := enumtype.Of(obj.Type()); ok && e.Constructor != nil {
 		return true
 	}
 	m, _, _ := types.LookupFieldOrMethod(obj.Type(), false, nil, "Validate")
