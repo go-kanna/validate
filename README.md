@@ -131,7 +131,8 @@ Where it differs from go-playground:
 - Every rule a field breaks is reported, not just the first. A value that fails `required` is the exception: it is
   reported `blank` alone, since anything else it breaks only says again that it is missing.
 - `required` means "not the zero value": `""`, `0`, `false`, `nil`, or `IsZero()` for a type that has the method. An
-  empty slice that is not nil is there; bound its length with `min=1`.
+  empty slice that is not nil is there; bound its length with `min=1`. A 0 sent is the 0 never sent, so where a 0, or a
+  value type whose rule accepts its zero, is a value of its own, take a pointer: `required` then reports only nil.
 - A nil pointer skips every rule but `required`: a `*string` tagged `max=20` accepts nil, one tagged `required,max=20`
   does not.
 - A floating-point NaN breaks every comparison it is held to: `min=0` and `max=100` both report it. The generated code
