@@ -140,7 +140,8 @@ Where it differs from go-playground:
 
 `rule=Type` applies the rule of `Type` to the field's value, or to each element after `dive`. `Type` is a value type of
 [kanna-value](#with-kanna-value), known by the shape kanna-value gives it, whose constructor `NewType(T) (Type, error)`
-holds a value to its rule, or a type with a method `Validate(T) error`, called on its zero value. A bare `Type` is one of the struct's package. `pkg.Type` names
+holds a value to its rule; an enum of kanna-value, whose constructor `NewType(string) (Type, error)` accepts only its
+constants; or a type with a method `Validate(T) error`, called on its zero value. A bare `Type` is one of the struct's package. `pkg.Type` names
 the package by its name, among the packages of your module and those the struct's package imports, directly or not;
 `a/pkg.Type`, with as much of the import path as it takes, tells two packages of one name apart. The struct's file need
 not import it, since the generated file does. The generated code records at the field what the constructor or
@@ -227,6 +228,16 @@ type SignUp struct {
 }
 ```
 
+An enum of kanna-value, a string type whose generated `UnmarshalText` accepts only its constants, needs no `oneof`
+listing them again, and reports the same code, `inclusion`:
+
+```go
+//kanna:validate
+type ListOrders struct {
+	Status *model.OrderStatus `json:"status"` // nil when omitted; "shiped" is reported as inclusion
+}
+```
+
 `rule=` applies the rule of a value type to a plain field, through its constructor. A request built from something
 other than JSON, such as a gRPC message, can take a `*time.Time` and check it as `model.CompletedAt` would:
 
@@ -244,6 +255,8 @@ type UpdateTask struct {
 		}
 	}
 ```
+
+It checks a plain string against the constants of an enum the same way, as `rule=model.OrderStatus`.
 
 go-kanna/value is a module of its own: `go get github.com/go-kanna/value` when you use these tags, or
 `go get -tool github.com/go-kanna/value/cmd/kanna-value` for its types. A generated file that needs it while your go.mod

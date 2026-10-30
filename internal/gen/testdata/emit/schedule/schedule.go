@@ -30,3 +30,20 @@ func NewDeadline(t time.Time) (Deadline, error) {
 	}
 	return Deadline{t: t}, nil
 }
+
+// Shift is an enum as kanna-value generates one, down to what rule= knows it
+// by: its constants and its constructor.
+type Shift string
+
+const (
+	ShiftDay   Shift = "day"
+	ShiftNight Shift = "night"
+)
+
+func NewShift(v string) (Shift, error) {
+	switch s := Shift(v); s {
+	case ShiftDay, ShiftNight:
+		return s, nil
+	}
+	return "", validate.Inclusion()
+}
