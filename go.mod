@@ -5,7 +5,7 @@ go 1.27.0
 toolchain go1.27.3
 
 require (
-	github.com/go-kanna/internal v0.0.13-0.20261030072229-d5e5a6871096
+	github.com/go-kanna/internal v0.0.13
 	golang.org/x/tools v0.52.0
 )
 
