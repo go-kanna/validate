@@ -107,6 +107,17 @@ func TestFailWith_KeepsItsOwnParams(t *testing.T) {
 	}
 }
 
+func TestError_ParamsOfABuiltInRule(t *testing.T) {
+	t.Parallel()
+
+	err := validate.TooLong(50)
+	err.Params()["count"] = 0
+
+	if got := err.Params()["count"]; got != 50 {
+		t.Errorf(`Params()["count"] = %v, want 50 whatever the caller does to the map`, got)
+	}
+}
+
 func TestError_ComparesByIdentity(t *testing.T) {
 	t.Parallel()
 
