@@ -7,7 +7,7 @@ toolchain go1.27.3
 tool github.com/go-kanna/validate/cmd/kanna-validate
 
 require (
-	github.com/go-kanna/validate v0.0.11
+	github.com/go-kanna/validate v0.0.12
 	github.com/go-playground/validator/v10 v10.30.5
 )
 
