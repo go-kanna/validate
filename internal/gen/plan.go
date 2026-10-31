@@ -12,7 +12,6 @@ import (
 
 	"github.com/go-kanna/internal/diag"
 	"github.com/go-kanna/internal/directive"
-	"github.com/go-kanna/internal/enumtype"
 	"github.com/go-kanna/internal/packages"
 	"github.com/go-kanna/internal/scan"
 )
@@ -369,11 +368,12 @@ func (p planner) hasValidate(t types.Type) bool {
 	return ok && (p.targets[recv.Obj()] || p.elsewhere(recv.Obj()) && p.marked(recv.Obj(), directiveKey))
 }
 
-// enum reports whether named is an enum of kanna-value. A string type with
-// constants is one only if it is marked, as nothing writes Validate on the rest.
+// enum reports whether named is an enum of kanna-value: a string type that is
+// marked, as nothing writes Validate on the rest. Its constants are no part of
+// telling, as export data may leave them out.
 func (p planner) enum(named *types.Named) bool {
-	_, ok := enumtype.Of(named)
-	return ok && p.marked(named.Obj(), enumKey)
+	return named.TypeParams().Len() == 0 && types.Identical(named.Underlying(), types.Typ[types.String]) &&
+		p.marked(named.Obj(), enumKey)
 }
 
 // elsewhere reports whether obj is declared in a package this run does not
