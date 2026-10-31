@@ -98,7 +98,7 @@ $ go generate ./...
   did you mean "Password"?
 ```
 
-スペルミスのあるディレクティブも同様です。そうでなければ、構造体に `Validate` がないまま、何の知らせもないことになります:
+スペルミスのあるディレクティブには警告が出ます。警告がなければ、構造体に `Validate` がないまま、何の知らせもないことになります:
 
 ```console
 ./request.go:3:1: warning: "//kanna:validte" is not recognized as a directive
