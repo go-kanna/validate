@@ -22,6 +22,9 @@ const outputFile = "validate_gen.go"
 // valueOutputFile is the file kanna-value generates in each package.
 const valueOutputFile = "value_gen.go"
 
+// valueGenerator names kanna-value in the header of that file.
+const valueGenerator = "kanna-value"
+
 // runtimePath is the import path of the package the generated code calls.
 const runtimePath = "github.com/go-kanna/validate"
 
