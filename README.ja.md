@@ -136,7 +136,7 @@ go-playground との違い:
 
 ## ネストとフック
 
-`Validate() error` を持つ型のフィールド（別の `//kanna:validate` の構造体、自前でバリデーションを書いた型、インターフェース）は、そのメソッドでバリデーションされ、エラーはそのフィールドの下にネストされます。`address.zip`、`items[2].sku`、マップなら `labels.primary` のようになります。そのような型のスライス、配列、マップは、`dive` がなくても要素ごとにバリデーションされます。JSON 名のない埋め込み構造体のエラーは、encoding/json がそのフィールドを平坦化するのと同じように、埋め込んでいる構造体の階層に置かれます。
+`Validate() error` を持つ型のフィールド（別の `//kanna:validate` の構造体、kanna-value の enum、自前でバリデーションを書いた型、インターフェース）は、そのメソッドでバリデーションされ、エラーはそのフィールドの下にネストされます。`address.zip`、`items[2].sku`、マップなら `labels.primary` のようになります。そのような型のスライス、配列、マップは、`dive` がなくても要素ごとにバリデーションされます。JSON 名のない埋め込み構造体のエラーは、encoding/json がそのフィールドを平坦化するのと同じように、埋め込んでいる構造体の階層に置かれます。
 
 2 つのフィールドにまたがるルールのように、タグでは表現できないルールは `validate` メソッドに書きます。生成された `Validate` は、すべてのタグをチェックした後でこのメソッドを呼び出します:
 
@@ -201,7 +201,7 @@ type SignUp struct {
 }
 ```
 
-kanna-value の enum は、生成された `UnmarshalText` が定数だけを受け入れる string 型です。定数を `oneof` で並べ直す必要はなく、同じコード `inclusion` を報告します:
+kanna-value の enum は、生成された `UnmarshalText` と `Validate` が定数だけを受け入れる string 型です。定数を `oneof` で並べ直す必要はなく、同じコード `inclusion` を報告します:
 
 ```go
 //kanna:validate

@@ -257,6 +257,46 @@ func TestCommand_RegeneratesOutputSetAsideUnderCallers(t *testing.T) {
 	}
 }
 
+// An enum has Validate once kanna-value writes it, which may be after this run.
+func TestCommand_NestsAnEnum(t *testing.T) {
+	t.Parallel()
+
+	const (
+		declared = "type Status string\n\nconst StatusActive Status = \"active\"\n"
+		enum     = "//kanna:enum\n" + declared
+		field    = "Status `json:\"status\" validate:\"required\"`\n}\n"
+		request  = "package api\n\nimport \"example.com/app/user\"\n\n//kanna:validate\ntype Request struct {\n" +
+			"\tStatus user." + field
+		nest = "x.Status.Validate()"
+	)
+	for _, tt := range []struct {
+		name  string
+		files map[string]string
+		want  bool
+	}{
+		{"of another package", map[string]string{"user/user.go": "package user\n\n" + enum, "api/api.go": request}, true},
+		{"of its own package", map[string]string{
+			"api/api.go": "package api\n\n" + enum + "\n//kanna:validate\ntype Request struct {\n\tStatus " + field,
+		}, true},
+		{"a string type with constants, not marked", map[string]string{
+			"user/user.go": "package user\n\n" + declared, "api/api.go": request,
+		}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := writeModule(t, tt.files)
+			if code, _, stderr := run(t, filepath.Join(dir, "api")); code != cli.ExitOK || stderr != "" {
+				t.Fatalf("exit %d, stderr %q", code, stderr)
+			}
+			got := readFile(t, filepath.Join(dir, "api", "validate_gen.go"))
+			if strings.Contains(got, nest) != tt.want {
+				t.Errorf("api/validate_gen.go holding %s = %v, want %v:\n%s", nest, !tt.want, tt.want, got)
+			}
+		})
+	}
+}
+
 func TestCommand_NestsAStructMarkedInAnotherPackage(t *testing.T) {
 	t.Parallel()
 

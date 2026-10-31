@@ -13,6 +13,9 @@ import (
 // directiveKey spells the directive //kanna:validate.
 const directiveKey = "validate"
 
+// enumKey spells the directive //kanna:enum of kanna-value.
+const enumKey = "enum"
+
 // outputFile is the file generated in each package.
 const outputFile = "validate_gen.go"
 
