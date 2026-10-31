@@ -19,6 +19,9 @@ const enumKey = "enum"
 // outputFile is the file generated in each package.
 const outputFile = "validate_gen.go"
 
+// valueOutputFile is the file kanna-value generates in each package.
+const valueOutputFile = "value_gen.go"
+
 // runtimePath is the import path of the package the generated code calls.
 const runtimePath = "github.com/go-kanna/validate"
 
