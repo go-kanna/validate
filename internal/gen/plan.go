@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-kanna/internal/diag"
 	"github.com/go-kanna/internal/directive"
+	"github.com/go-kanna/internal/enumtype"
 	"github.com/go-kanna/internal/packages"
 	"github.com/go-kanna/internal/scan"
 )
@@ -101,8 +102,14 @@ type planner struct {
 	// what the struct's package imports.
 	refs refScope
 
-	// marks caches what marked has read, by type.
-	marks map[*types.TypeName]bool
+	// marks caches what marked has read.
+	marks map[mark]bool
+}
+
+// mark is a directive on the declaration of a type.
+type mark struct {
+	obj *types.TypeName
+	key string
 }
 
 // plans decides what the Validate method of each target checks. rewritten
@@ -115,7 +122,7 @@ func plans(fset *token.FileSet, targets []target, rewritten map[string]bool, ref
 		targets:   make(map[*types.TypeName]bool, len(targets)),
 		rewritten: rewritten,
 		refs:      refs,
-		marks:     make(map[*types.TypeName]bool),
+		marks:     make(map[mark]bool),
 	}
 	for _, t := range targets {
 		p.targets[t.Named.Obj()] = true
@@ -328,10 +335,11 @@ func cannotTellEmpty(l level, t types.Type, at site) *ruleError {
 // A struct of another package marked //kanna:validate has it once that
 // package's own run writes it, which go generate ./... may run after this one,
 // so the mark decides, and an earlier run's output there counts only for what
-// is marked still.
+// is marked still. An enum has it once kanna-value writes it, which may be
+// after this run too.
 func (p planner) hasValidate(t types.Type) bool {
 	if named, ok := types.Unalias(t).(*types.Named); ok &&
-		(p.targets[named.Obj()] || p.elsewhere(named.Obj()) && p.marked(named.Obj())) {
+		(p.targets[named.Obj()] || p.elsewhere(named.Obj()) && p.marked(named.Obj(), directiveKey) || p.enum(named)) {
 		return true
 	}
 
@@ -358,7 +366,14 @@ func (p planner) hasValidate(t types.Type) bool {
 		recvType = ptr.Elem()
 	}
 	recv, ok := types.Unalias(recvType).(*types.Named)
-	return ok && (p.targets[recv.Obj()] || p.elsewhere(recv.Obj()) && p.marked(recv.Obj()))
+	return ok && (p.targets[recv.Obj()] || p.elsewhere(recv.Obj()) && p.marked(recv.Obj(), directiveKey))
+}
+
+// enum reports whether named is an enum of kanna-value. A string type with
+// constants is one only if it is marked, as nothing writes Validate on the rest.
+func (p planner) enum(named *types.Named) bool {
+	_, ok := enumtype.Of(named)
+	return ok && p.marked(named.Obj(), enumKey)
 }
 
 // elsewhere reports whether obj is declared in a package this run does not
@@ -367,25 +382,25 @@ func (p planner) elsewhere(obj *types.TypeName) bool {
 	return obj.Pkg() != nil && !p.rewritten[obj.Pkg().Path()]
 }
 
-// marked reports whether the declaration of obj carries //kanna:validate,
-// reading the file it is in: a package loaded from export data has no syntax.
-func (p planner) marked(obj *types.TypeName) bool {
-	if marked, ok := p.marks[obj]; ok {
+// marked reports whether the declaration of obj carries //kanna:<key>, reading
+// the file it is in: a package loaded from export data has no syntax.
+func (p planner) marked(obj *types.TypeName, key string) bool {
+	if marked, ok := p.marks[mark{obj, key}]; ok {
 		return marked
 	}
 	marked := false
 	if path := p.fset.Position(obj.Pos()).Filename; path != "" {
 		fset := token.NewFileSet()
 		if f, err := parser.ParseFile(fset, path, nil, parser.ParseComments|parser.SkipObjectResolution); err == nil {
-			marked = declMarked(fset, f, obj.Name())
+			marked = declMarked(fset, f, obj.Name(), key)
 		}
 	}
-	p.marks[obj] = marked
+	p.marks[mark{obj, key}] = marked
 	return marked
 }
 
-// declMarked reports whether f declares the type name with //kanna:validate.
-func declMarked(fset *token.FileSet, f *ast.File, name string) bool {
+// declMarked reports whether f declares the type name with //kanna:<key>.
+func declMarked(fset *token.FileSet, f *ast.File, name, key string) bool {
 	for _, decl := range f.Decls {
 		gd, ok := decl.(*ast.GenDecl)
 		if !ok || gd.Tok != token.TYPE {
@@ -397,7 +412,7 @@ func declMarked(fset *token.FileSet, f *ast.File, name string) bool {
 				if doc == nil && len(gd.Specs) == 1 {
 					doc = gd.Doc
 				}
-				d, _ := directive.Find(fset, doc, directiveKey)
+				d, _ := directive.Find(fset, doc, key)
 				return d.Found
 			}
 		}

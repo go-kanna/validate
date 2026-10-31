@@ -153,9 +153,9 @@ not import it, since the generated file does. The generated code records at the 
 
 ## Nesting and hooks
 
-A field whose type has `Validate() error` — another `//kanna:validate` struct, a type validating itself by hand, an
-interface — is validated with it, and its errors are nested under the field: `address.zip`, `items[2].sku`, or
-`labels.primary` for a map. Slices, arrays, and maps of such types are validated element by element without a `dive`.
+A field whose type has `Validate() error` — another `//kanna:validate` struct, an enum of kanna-value, a type validating
+itself by hand, an interface — is validated with it, and its errors are nested under the field: `address.zip`,
+`items[2].sku`, or `labels.primary` for a map. Slices, arrays, and maps of such types are validated element by element without a `dive`.
 An embedded struct without a JSON name keeps its errors at the level of the struct embedding it, as encoding/json
 flattens its fields.
 
@@ -232,8 +232,8 @@ type SignUp struct {
 }
 ```
 
-An enum of kanna-value, a string type whose generated `UnmarshalText` accepts only its constants, needs no `oneof`
-listing them again, and reports the same code, `inclusion`:
+An enum of kanna-value, a string type whose generated `UnmarshalText` and `Validate` accept only its constants, needs no
+`oneof` listing them again, and reports the same code, `inclusion`:
 
 ```go
 //kanna:validate
