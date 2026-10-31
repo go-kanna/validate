@@ -347,6 +347,64 @@ func TestCommand_StaysUpToDateOnceAnEnumIsGenerated(t *testing.T) {
 	}
 }
 
+// The next run of kanna-value takes away the Validate of an enum that lost its
+// mark, and that run may come after this one.
+func TestCommand_CallsTheValidateOfAnEnumWhileMarked(t *testing.T) {
+	t.Parallel()
+
+	const (
+		declared = "type Status string\n\nconst StatusActive Status = \"active\"\n"
+		byHand   = "\nfunc (x Status) Validate() error { return nil }\n"
+	)
+	for _, field := range []string{"user.Status", "*user.Status", "[]user.Status", "map[string]user.Status"} {
+		for _, tt := range []struct {
+			name  string
+			files map[string]string
+			want  bool
+		}{
+			{"generated and marked", map[string]string{
+				"user/user.go": "package user\n\n//kanna:enum\n" + declared, "user/value_gen.go": enumValidate,
+			}, true},
+			{"generated, the mark gone", map[string]string{
+				"user/user.go": "package user\n\n" + declared, "user/value_gen.go": enumValidate,
+			}, false},
+			{"written by hand", map[string]string{"user/user.go": "package user\n\n" + declared + byHand}, true},
+		} {
+			t.Run(field+" "+tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				tt.files["api/api.go"] = strings.Replace(enumRequest, "user.Status", field, 1)
+				dir := writeModule(t, tt.files)
+				if code, _, stderr := run(t, filepath.Join(dir, "api")); code != cli.ExitOK || stderr != "" {
+					t.Fatalf("exit %d, stderr %q", code, stderr)
+				}
+				got := readFile(t, filepath.Join(dir, "api", "validate_gen.go"))
+				if strings.Contains(got, ".Validate()") != tt.want {
+					t.Errorf("api/validate_gen.go calling Validate = %v, want %v:\n%s", !tt.want, tt.want, got)
+				}
+			})
+		}
+	}
+}
+
+// Under -trimpath export data names no file to read a mark in, which does not
+// make the mark gone.
+func TestCommand_CallsTheValidateOfAnEnumUnderTrimpath(t *testing.T) {
+	t.Setenv("GOFLAGS", "-trimpath")
+
+	dir := writeModule(t, map[string]string{
+		"user/user.go":      "package user\n\n//kanna:enum\ntype Status string\n\nconst StatusActive Status = \"active\"\n",
+		"user/value_gen.go": enumValidate,
+		"api/api.go":        enumRequest,
+	})
+	if code, _, stderr := run(t, filepath.Join(dir, "api")); code != cli.ExitOK || stderr != "" {
+		t.Fatalf("exit %d, stderr %q", code, stderr)
+	}
+	if got := readFile(t, filepath.Join(dir, "api", "validate_gen.go")); !strings.Contains(got, enumNest) {
+		t.Errorf("api/validate_gen.go does not hold %s:\n%s", enumNest, got)
+	}
+}
+
 func TestCommand_NestsAStructMarkedInAnotherPackage(t *testing.T) {
 	t.Parallel()
 

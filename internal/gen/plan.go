@@ -335,7 +335,7 @@ func cannotTellEmpty(l level, t types.Type, at site) *ruleError {
 // package's own run writes it, which go generate ./... may run after this one,
 // so the mark decides, and an earlier run's output there counts only for what
 // is marked still. An enum has it once kanna-value writes it, which may be
-// after this run too.
+// after this run too, and the same goes for what kanna-value wrote earlier.
 func (p planner) hasValidate(t types.Type) bool {
 	if named, ok := types.Unalias(t).(*types.Named); ok &&
 		(p.targets[named.Obj()] || p.elsewhere(named.Obj()) && p.marked(named.Obj(), directiveKey) || p.enum(named)) {
@@ -356,16 +356,21 @@ func (p planner) hasValidate(t types.Type) bool {
 	// An earlier run's output keeps only the methods of what is marked: in a
 	// package this run rewrites, today's targets, and elsewhere what is marked
 	// still, which the check above has found already, but for a method
-	// promoted from a struct it embeds.
-	if filepath.Base(p.fset.Position(fn.Pos()).Filename) != outputFile {
-		return true
-	}
+	// promoted from a struct it embeds. Under -trimpath, whose paths are not
+	// absolute, the mark of an enum cannot be read, and its method stands.
+	file := p.fset.Position(fn.Pos()).Filename
 	recvType := fn.Signature().Recv().Type()
 	if ptr, isPtr := recvType.(*types.Pointer); isPtr {
 		recvType = ptr.Elem()
 	}
 	recv, ok := types.Unalias(recvType).(*types.Named)
-	return ok && (p.targets[recv.Obj()] || p.elsewhere(recv.Obj()) && p.marked(recv.Obj(), directiveKey))
+	switch filepath.Base(file) {
+	case outputFile:
+		return ok && (p.targets[recv.Obj()] || p.elsewhere(recv.Obj()) && p.marked(recv.Obj(), directiveKey))
+	case valueOutputFile:
+		return !filepath.IsAbs(file) || ok && p.enum(recv)
+	}
+	return true
 }
 
 // enum reports whether named is an enum of kanna-value: a string type that is
