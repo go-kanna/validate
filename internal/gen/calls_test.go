@@ -387,21 +387,85 @@ func TestCommand_CallsTheValidateOfAnEnumWhileMarked(t *testing.T) {
 	}
 }
 
-// Under -trimpath export data names no file to read a mark in, which does not
-// make the mark gone.
-func TestCommand_CallsTheValidateOfAnEnumUnderTrimpath(t *testing.T) {
+// Under -trimpath, where export data holds no path on disk, a run follows an
+// enum as it does otherwise: before kanna-value writes its Validate, after, and
+// with the mark gone before kanna-value takes the method away.
+func TestCommand_FollowsAnEnumUnderTrimpath(t *testing.T) {
 	t.Setenv("GOFLAGS", "-trimpath")
 
+	const declared = "type Status string\n\nconst StatusActive Status = \"active\"\n"
 	dir := writeModule(t, map[string]string{
-		"user/user.go":      "package user\n\n//kanna:enum\ntype Status string\n\nconst StatusActive Status = \"active\"\n",
-		"user/value_gen.go": enumValidate,
-		"api/api.go":        enumRequest,
+		"user/user.go": "package user\n\n//kanna:enum\n" + declared,
+		"api/api.go":   enumRequest,
 	})
-	if code, _, stderr := run(t, filepath.Join(dir, "api")); code != cli.ExitOK || stderr != "" {
-		t.Fatalf("exit %d, stderr %q", code, stderr)
+	api := filepath.Join(dir, "api")
+	generate := func(want bool) {
+		t.Helper()
+
+		if code, _, stderr := run(t, api); code != cli.ExitOK || stderr != "" {
+			t.Fatalf("exit %d, stderr %q", code, stderr)
+		}
+		got := readFile(t, filepath.Join(api, "validate_gen.go"))
+		if strings.Contains(got, enumNest) != want {
+			t.Errorf("api/validate_gen.go holding %s = %v, want %v:\n%s", enumNest, !want, want, got)
+		}
 	}
-	if got := readFile(t, filepath.Join(dir, "api", "validate_gen.go")); !strings.Contains(got, enumNest) {
-		t.Errorf("api/validate_gen.go does not hold %s:\n%s", enumNest, got)
+
+	generate(true)
+
+	output := filepath.Join(dir, "user", "value_gen.go")
+	writeFile(t, output, enumValidate)
+	if code, _, stderr := run(t, api, "-check"); code != cli.ExitOK {
+		t.Errorf("-check = %d, stderr %q", code, stderr)
+	}
+	generate(true)
+	compiles(t, dir)
+
+	writeFile(t, filepath.Join(dir, "user", "user.go"), "package user\n\n"+declared)
+	generate(false)
+	if err := os.Remove(output); err != nil {
+		t.Fatal(err)
+	}
+	compiles(t, dir)
+}
+
+// A mark is read in the package declaring the type however it was reached, and
+// whether export data holds a path on disk or not.
+func TestCommand_ReadsMarksOfOtherPackages(t *testing.T) {
+	const (
+		address = "package user\n\n//kanna:validate\ntype Address struct {\n\tCity string `validate:\"required\"`\n}\n"
+		status  = "package user\n\n//kanna:enum\ntype Status string\n\nconst StatusActive Status = \"active\"\n"
+		dto     = "package dto\n\nimport \"example.com/app/user\"\n\ntype Statuses []user.Status\n"
+	)
+	for _, tt := range []struct {
+		name  string
+		files map[string]string
+	}{
+		{"a struct of a package imported", map[string]string{
+			"user/user.go": address,
+			"api/api.go": "package api\n\nimport \"example.com/app/user\"\n\n" +
+				"//kanna:validate\ntype Request struct {\n\tAddress user.Address\n}\n",
+		}},
+		{"an enum of a package imported through another", map[string]string{
+			"user/user.go": status,
+			"dto/dto.go":   dto,
+			"api/api.go": "package api\n\nimport \"example.com/app/dto\"\n\n" +
+				"//kanna:validate\ntype Request struct {\n\tStatuses dto.Statuses\n}\n",
+		}},
+	} {
+		for _, flags := range []string{"", "-trimpath"} {
+			t.Run(tt.name+" "+flags, func(t *testing.T) {
+				t.Setenv("GOFLAGS", flags)
+
+				dir := writeModule(t, tt.files)
+				if code, _, stderr := run(t, filepath.Join(dir, "api")); code != cli.ExitOK || stderr != "" {
+					t.Fatalf("exit %d, stderr %q", code, stderr)
+				}
+				if got := readFile(t, filepath.Join(dir, "api", "validate_gen.go")); !strings.Contains(got, ".Validate()") {
+					t.Errorf("api/validate_gen.go calls no Validate:\n%s", got)
+				}
+			})
+		}
 	}
 }
 

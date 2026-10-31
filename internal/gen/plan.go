@@ -356,19 +356,17 @@ func (p planner) hasValidate(t types.Type) bool {
 	// An earlier run's output keeps only the methods of what is marked: in a
 	// package this run rewrites, today's targets, and elsewhere what is marked
 	// still, which the check above has found already, but for a method
-	// promoted from a struct it embeds. Under -trimpath, whose paths are not
-	// absolute, the mark of an enum cannot be read, and its method stands.
-	file := p.fset.Position(fn.Pos()).Filename
+	// promoted from a struct it embeds.
 	recvType := fn.Signature().Recv().Type()
 	if ptr, isPtr := recvType.(*types.Pointer); isPtr {
 		recvType = ptr.Elem()
 	}
 	recv, ok := types.Unalias(recvType).(*types.Named)
-	switch filepath.Base(file) {
+	switch filepath.Base(p.fset.Position(fn.Pos()).Filename) {
 	case outputFile:
 		return ok && (p.targets[recv.Obj()] || p.elsewhere(recv.Obj()) && p.marked(recv.Obj(), directiveKey))
 	case valueOutputFile:
-		return !filepath.IsAbs(file) || ok && p.enum(recv)
+		return ok && p.enum(recv)
 	}
 	return true
 }
