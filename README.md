@@ -156,6 +156,8 @@ not import it, since the generated file does. The generated code records at the 
 A field whose type has `Validate() error` — another `//kanna:validate` struct, an enum of kanna-value, a type validating
 itself by hand, an interface — is validated with it, and its errors are nested under the field: `address.zip`,
 `items[2].sku`, or `labels.primary` for a map. Slices, arrays, and maps of such types are validated element by element without a `dive`.
+A type with `Validate` through an embedded pointer or interface is validated only when that is not nil, as a nil pointer
+in a field is skipped. Generation stops when another package does not export what would have to be tested for it.
 An embedded struct without a JSON name keeps its errors at the level of the struct embedding it, as encoding/json
 flattens its fields.
 

@@ -193,6 +193,69 @@ func TestGenerated(t *testing.T) {
 	}
 }
 
+// What a type has through an embedded pointer or interface is called only when
+// that is there, as a nil pointer or interface in a field is skipped.
+func TestGenerated_PromotedThroughNil(t *testing.T) {
+	t.Parallel()
+
+	var (
+		valid   = emit.ByPointer{Item: &emit.Item{SKU: "A1"}}
+		invalid = emit.ByPointer{Item: &emit.Item{}}
+		failing = emit.ByInterface{Checker: checker{err: validate.Fail("no")}}
+	)
+	tests := []struct {
+		name string
+		in   emit.Promoted
+		want []string // the fields reported
+	}{
+		{name: "nothing there"},
+		{name: "a nil pointer behind a pointer", in: emit.Promoted{Deeper: emit.Deeper{
+			Through: emit.Through{ByPointer: &emit.ByPointer{}},
+		}}},
+		{name: "a nil pointer in a nested value", in: emit.Promoted{
+			Ref: &emit.ByPointer{}, List: []emit.ByPointer{{}}, Map: map[string]emit.ByPointer{"a": {}},
+		}},
+		{name: "what is there and valid", in: emit.Promoted{
+			Pointer: valid, Ref: &valid, List: []emit.ByPointer{valid}, Map: map[string]emit.ByPointer{"a": valid},
+			Interface: emit.ByInterface{Checker: checker{}},
+			Deeper:    emit.Deeper{Through: emit.Through{ByPointer: &valid}},
+		}},
+		{
+			name: "what is there and invalid",
+			in: emit.Promoted{
+				Pointer: invalid, Ref: &invalid, List: []emit.ByPointer{invalid}, Map: map[string]emit.ByPointer{"a": invalid},
+				Interface: failing,
+				Deeper:    emit.Deeper{Through: emit.Through{ByPointer: &invalid}},
+			},
+			want: []string{"pointer.sku", "interface", "deeper.sku", "ref.sku", "list[0].sku", "map.a.sku"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tt.in.Validate()
+			if tt.want == nil {
+				if err != nil {
+					t.Fatalf("Validate() = %v, want nil", err)
+				}
+				return
+			}
+			errs, ok := errors.AsType[validate.Errors](err)
+			if !ok {
+				t.Fatalf("Validate() = %v, want validate.Errors", err)
+			}
+			var got []string
+			for _, e := range errs {
+				got = append(got, e.Field)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("Validate() reported %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGenerated_CountKeepsTheFieldsType(t *testing.T) {
 	t.Parallel()
 

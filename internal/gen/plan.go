@@ -62,6 +62,11 @@ type value struct {
 	// the value's path.
 	nest bool
 
+	// nilable holds the selectors, from the value, of the embedded fields its
+	// Validate is promoted through that may be nil, outermost first. nest
+	// calls it only when none is: it would panic.
+	nilable []string
+
 	// pointee is what the rest of a pointer's rules check: what it points to,
 	// when it is not nil.
 	pointee *value
@@ -237,7 +242,14 @@ func (p planner) value(t types.Type, levels []level, at site, enclosing []types.
 		v.checks = append(v.checks, c)
 	}
 
-	v.nest = p.hasValidate(t)
+	path, nest := p.findValidate(t)
+	v.nest = nest
+	if nest {
+		var hidden *types.Var
+		if v.nilable, hidden = nilableOn(path, at.pkg); hidden != nil {
+			errs = append(errs, cannotTestNil(hidden, t, at))
+		}
+	}
 
 	elem, ok := elemOf(t)
 	elemAt := site{pkg: at.pkg, refs: at.refs}
@@ -251,7 +263,9 @@ func (p planner) value(t types.Type, levels []level, at site, enclosing []types.
 	case ok && !v.nest:
 		// The elements are validated whether or not the tag dives: a slice of
 		// structs that validate themselves is checked as the structs would be.
-		v.elem, _ = p.value(elem, nil, elemAt, enclosing)
+		var es []error
+		v.elem, es = p.value(elem, nil, elemAt, enclosing)
+		errs = append(errs, es...)
 	}
 
 	return pruned(v), errs
@@ -333,8 +347,9 @@ func cannotTellEmpty(l level, t types.Type, at site) *ruleError {
 	return err
 }
 
-// hasValidate reports whether the generated code can call Validate() error on
-// a value of type t, once the generators have run.
+// findValidate reports whether the generated code can call Validate() error on
+// a value of type t, once the generators have run, and returns the embedded
+// fields it is promoted through, outermost first.
 //
 // A struct of another package marked //kanna:validate has it once that
 // package's own run writes it, which go generate ./... may run after this one,
@@ -346,34 +361,38 @@ func cannotTellEmpty(l level, t types.Type, at site) *ruleError {
 // what is written. So the method is looked for as the compiler looks for it,
 // level by level of embedding: the first level to name it decides, and two
 // names there collide, which leaves the type without it.
-func (p planner) hasValidate(t types.Type) bool {
+func (p planner) findValidate(t types.Type) ([]*types.Var, bool) {
 	seen := make(map[types.Type]bool)
-	for level := []types.Type{types.Unalias(t)}; len(level) > 0; {
+	for level := []embedding{{typ: types.Unalias(t)}}; len(level) > 0; {
 		for _, e := range level {
-			seen[origin(e)] = true
+			seen[origin(e.typ)] = true
 		}
 
 		var (
-			found []bool // whether each Validate of this level can be called
-			next  []types.Type
+			found    []embedding // what names Validate at this level
+			callable bool
+			next     []embedding
 		)
 		for _, e := range level {
-			if named, callable := p.ownValidate(e); named {
-				found = append(found, callable)
+			if named, ok := p.ownValidate(e.typ); named {
+				found, callable = append(found, e), ok
 				continue
 			}
-			for _, inner := range embedded(e) {
-				if !seen[origin(inner)] {
+			for _, inner := range e.embedded() {
+				if !seen[origin(inner.typ)] {
 					next = append(next, inner)
 				}
 			}
 		}
 		if len(found) > 0 {
-			return len(found) == 1 && found[0]
+			if len(found) > 1 || !callable {
+				return nil, false
+			}
+			return found[0].path, true
 		}
 		level = next
 	}
-	return false
+	return nil, false
 }
 
 // ownValidate reports whether t, leaving aside what it embeds, names Validate
@@ -429,25 +448,68 @@ func origin(t types.Type) types.Type {
 	return t
 }
 
-// embedded returns the types t embeds, if it is a struct, without the pointers
-// they may be embedded by.
-func embedded(t types.Type) []types.Type {
-	s, ok := t.Underlying().(*types.Struct)
+// embedding is a type reached through what another embeds.
+type embedding struct {
+	typ types.Type
+
+	// path holds the embedded fields leading to it, outermost first.
+	path []*types.Var
+}
+
+// embedded returns what e embeds, if it is a struct, without the pointers it
+// may be embedded by.
+func (e embedding) embedded() []embedding {
+	s, ok := e.typ.Underlying().(*types.Struct)
 	if !ok {
 		return nil
 	}
-	var inner []types.Type
+	var inner []embedding
 	for f := range s.Fields() {
 		if !f.Embedded() {
 			continue
 		}
-		e := types.Unalias(f.Type())
-		if ptr, isPtr := e.(*types.Pointer); isPtr {
-			e = types.Unalias(ptr.Elem())
+		typ := types.Unalias(f.Type())
+		if ptr, isPtr := typ.(*types.Pointer); isPtr {
+			typ = types.Unalias(ptr.Elem())
 		}
-		inner = append(inner, e)
+		inner = append(inner, embedding{typ: typ, path: append(slices.Clip(e.path), f)})
 	}
 	return inner
+}
+
+// nilableOn returns the selectors of the fields on path that may be nil, each
+// from the start of path, for code of pkg to test. A field another package does
+// not export leaves what is on its way out of reach of pkg, and is returned
+// when something there needs testing.
+func nilableOn(path []*types.Var, pkg *types.Package) (selectors []string, hidden *types.Var) {
+	var (
+		selector string
+		blocked  *types.Var
+	)
+	for _, f := range path {
+		selector = strings.TrimPrefix(selector+"."+f.Name(), ".")
+		if blocked == nil && !f.Exported() && f.Pkg().Path() != pkg.Path() {
+			blocked = f
+		}
+		if _, isPtr := types.Unalias(f.Type()).(*types.Pointer); !isPtr && !types.IsInterface(f.Type()) {
+			continue
+		}
+		if blocked != nil {
+			return nil, blocked
+		}
+		selectors = append(selectors, selector)
+	}
+	return selectors, nil
+}
+
+// cannotTestNil reports a Validate of t promoted through what may be nil, which
+// the struct's package cannot test as field is not exported. Calling it might
+// panic, and leaving it out would let any value through.
+func cannotTestNil(field *types.Var, t types.Type, at site) *ruleError {
+	err := ruleErrorf("%s has Validate through an embedded field that may be nil, which package %s cannot test, "+
+		"as %s is not exported", at.typeString(t), at.pkg.Name(), field.Name())
+	err.hint = "give " + at.typeString(t) + " a Validate of its own, or export " + field.Name()
+	return err
 }
 
 // writtenBy reports whether tool wrote the file at path, which it names name.
