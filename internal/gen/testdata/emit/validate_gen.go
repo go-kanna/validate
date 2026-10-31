@@ -259,3 +259,42 @@ func (x Audit) Validate() error {
 
 	return errs.Err()
 }
+
+// Validate checks x against the validate tags of Promoted. It returns the
+// validate.Errors of every rule x breaks, or nil.
+func (x Promoted) Validate() error {
+	var errs validate.Errors
+
+	if x.Pointer.Item != nil {
+		errs.Nest("pointer", x.Pointer.Validate())
+	}
+
+	if x.Interface.Checker != nil {
+		errs.Nest("interface", x.Interface.Validate())
+	}
+
+	if x.Deeper.Through.ByPointer != nil && x.Deeper.Through.ByPointer.Item != nil {
+		errs.Nest("deeper", x.Deeper.Validate())
+	}
+
+	if x.Ref != nil {
+		if x.Ref.Item != nil {
+			errs.Nest("ref", x.Ref.Validate())
+		}
+	}
+
+	for i := range x.List {
+		if x.List[i].Item != nil {
+			errs.Nest(validate.Index("list", i), x.List[i].Validate())
+		}
+	}
+
+	for _, k := range slices.Sorted(maps.Keys(x.Map)) {
+		v := x.Map[k]
+		if v.Item != nil {
+			errs.Nest(validate.Key("map", k), v.Validate())
+		}
+	}
+
+	return errs.Err()
+}

@@ -530,6 +530,7 @@ func TestCommand_FindsAValidateToBePromoted(t *testing.T) {
 		{"embedded deeper", "type Inner struct{ Status }\n\ntype Filter struct{ Inner }\n", true},
 		{"embedded in a generic struct", "type Box[T any] struct{ Status }\n\ntype Filter struct{ Box[int] }\n", true},
 		{"embedded in what the type is defined as", "type Base struct{ Status }\n\ntype Filter Base\n", true},
+		{"embedded unexported", "type hidden struct{ Status }\n\ntype Filter struct{ hidden }\n", true},
 		{"embedded beside the type itself", "type Filter struct {\n\t*Filter\n\tStatus\n}\n", true},
 		{"nothing but the type itself", "type Filter struct{ *Filter }\n", false},
 		{"a struct marked", "//kanna:validate\ntype Address struct {\n\tCity string `validate:\"required\"`\n}\n\n" +
@@ -645,6 +646,62 @@ func TestCommand_FindsNoValidateToBeRemoved(t *testing.T) {
 			compiles(t, dir)
 		})
 	}
+}
+
+// The generated code tests what a Validate is promoted through for nil, which
+// it cannot do through what another package does not export.
+func TestCommand_RefusesANilItCannotTest(t *testing.T) {
+	t.Parallel()
+
+	const (
+		enum    = "package user\n\n//kanna:enum\ntype Status string\n\nconst StatusActive Status = \"active\"\n\n"
+		request = "package api\n\nimport \"example.com/app/user\"\n\n//kanna:validate\n" +
+			"type Request struct {\n\tFilter user.Filter\n}\n"
+		position = "./api.go:7:2: error: user.Filter has Validate through an embedded field that may be nil, " +
+			"which package api cannot test, as "
+		hint = " is not exported (field Filter)\n  give user.Filter a Validate of its own, or export "
+	)
+	for _, tt := range []struct {
+		name    string
+		decl    string
+		request string
+		want    string
+	}{
+		{"a pointer", "type status string\n\nfunc (status) Validate() error { return nil }\n\n" +
+			"type Filter struct{ *status }\n", request, position + "status" + hint + "status\n"},
+		{"an interface", "type checker interface{ Validate() error }\n\ntype Filter struct{ checker }\n",
+			request, position + "checker" + hint + "checker\n"},
+		{"a pointer below", "type hidden struct{ *Status }\n\ntype Filter struct{ hidden }\n",
+			request, position + "hidden" + hint + "hidden\n"},
+		{"an element", "type status string\n\nfunc (status) Validate() error { return nil }\n\n" +
+			"type Filter struct{ *status }\n", strings.Replace(request, "user.Filter", "[]user.Filter", 1),
+			position + "status" + hint + "status\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := writeModule(t, map[string]string{"user/user.go": enum + tt.decl, "api/api.go": tt.request})
+			if code, _, stderr := run(t, filepath.Join(dir, "api")); code != cli.ExitFailure || stderr != tt.want {
+				t.Errorf("exit %d, stderr:\n%s\nwant %d and\n%s", code, stderr, cli.ExitFailure, tt.want)
+			}
+		})
+	}
+}
+
+func TestCommand_TestsANilOfItsOwnPackage(t *testing.T) {
+	t.Parallel()
+
+	dir := writeModule(t, map[string]string{"api.go": "package api\n\ntype status string\n\n" +
+		"func (status) Validate() error { return nil }\n\ntype Filter struct{ *status }\n\n" +
+		"//kanna:validate\ntype Request struct {\n\tFilter Filter\n}\n"})
+	if code, _, stderr := run(t, dir); code != cli.ExitOK || stderr != "" {
+		t.Fatalf("exit %d, stderr %q", code, stderr)
+	}
+	const want = "if x.Filter.status != nil {"
+	if got := readFile(t, filepath.Join(dir, "validate_gen.go")); !strings.Contains(got, want) {
+		t.Errorf("validate_gen.go does not hold %q:\n%s", want, got)
+	}
+	compiles(t, dir)
 }
 
 func TestCommand_NestsAStructMarkedInAnotherPackage(t *testing.T) {

@@ -107,3 +107,22 @@ type Address struct {
 type Audit struct {
 	By string `json:"by" validate:"required"`
 }
+
+// ByPointer, ByInterface, and Deeper have Validate through what they embed,
+// which may be nil.
+type (
+	ByPointer   struct{ *Item }
+	ByInterface struct{ Checker }
+	Deeper      struct{ Through }
+	Through     struct{ *ByPointer }
+)
+
+//kanna:validate
+type Promoted struct {
+	Pointer   ByPointer            `json:"pointer"`
+	Interface ByInterface          `json:"interface"`
+	Deeper    Deeper               `json:"deeper"`
+	Ref       *ByPointer           `json:"ref"`
+	List      []ByPointer          `json:"list"`
+	Map       map[string]ByPointer `json:"map"`
+}
