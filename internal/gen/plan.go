@@ -334,47 +334,120 @@ func cannotTellEmpty(l level, t types.Type, at site) *ruleError {
 }
 
 // hasValidate reports whether the generated code can call Validate() error on
-// a value of type t.
+// a value of type t, once the generators have run.
 //
 // A struct of another package marked //kanna:validate has it once that
 // package's own run writes it, which go generate ./... may run after this one,
-// so the mark decides, and an earlier run's output there counts only for what
-// is marked still. An enum has it once kanna-value writes it, which may be
-// after this run too, and the same goes for what kanna-value wrote earlier.
+// so the mark decides, and an earlier run's output counts only for what is
+// marked still. An enum has it once kanna-value writes it, which may be after
+// this run too, and the same goes for what kanna-value wrote earlier.
+//
+// A type has it through what it embeds as well, which go/types can tell only of
+// what is written. So the method is looked for as the compiler looks for it,
+// level by level of embedding: the first level to name it decides, and two
+// names there collide, which leaves the type without it.
 func (p planner) hasValidate(t types.Type) bool {
-	if named, ok := types.Unalias(t).(*types.Named); ok &&
-		(p.targets[named.Obj()] || p.elsewhere(named.Obj()) && p.marked(named.Obj(), directiveKey) || p.enum(named)) {
-		return true
+	seen := make(map[types.Type]bool)
+	for level := []types.Type{types.Unalias(t)}; len(level) > 0; {
+		for _, e := range level {
+			seen[origin(e)] = true
+		}
+
+		var (
+			found []bool // whether each Validate of this level can be called
+			next  []types.Type
+		)
+		for _, e := range level {
+			if named, callable := p.ownValidate(e); named {
+				found = append(found, callable)
+				continue
+			}
+			for _, inner := range embedded(e) {
+				if !seen[origin(inner)] {
+					next = append(next, inner)
+				}
+			}
+		}
+		if len(found) > 0 {
+			return len(found) == 1 && found[0]
+		}
+		level = next
+	}
+	return false
+}
+
+// ownValidate reports whether t, leaving aside what it embeds, names Validate
+// once the generators have run, and whether that is a Validate() error.
+func (p planner) ownValidate(t types.Type) (named, callable bool) {
+	if n, ok := t.(*types.Named); ok {
+		if obj := n.Obj(); p.targets[obj] || p.elsewhere(obj) && p.marked(obj, directiveKey) || p.enum(n) {
+			return true, true
+		}
+		for m := range n.Methods() {
+			if m.Name() == "Validate" && !p.leftover(m) {
+				return true, isValidate(m.Signature())
+			}
+		}
 	}
 
-	obj, _, _ := types.LookupFieldOrMethod(t, true, nil, "Validate")
-	fn, ok := obj.(*types.Func)
-	if !ok {
-		return false
+	switch u := t.Underlying().(type) {
+	case *types.Struct:
+		for f := range u.Fields() {
+			if f.Name() == "Validate" {
+				return true, false
+			}
+		}
+	case *types.Interface:
+		for m := range u.Methods() {
+			if m.Name() == "Validate" {
+				return true, isValidate(m.Signature())
+			}
+		}
 	}
-	sig := fn.Signature()
-	if sig.Params().Len() != 0 || sig.Results().Len() != 1 ||
-		!types.Identical(sig.Results().At(0).Type(), types.Universe.Lookup("error").Type()) {
-		return false
-	}
+	return false, false
+}
 
-	// An earlier run's output keeps only the methods of what is marked: in a
-	// package this run rewrites, today's targets, and elsewhere what is marked
-	// still, which the check above has found already, but for a method
-	// promoted from a struct it embeds.
-	recvType := fn.Signature().Recv().Type()
-	if ptr, isPtr := recvType.(*types.Pointer); isPtr {
-		recvType = ptr.Elem()
-	}
-	recv, ok := types.Unalias(recvType).(*types.Named)
+// leftover reports whether fn, on a type no generator gives Validate, is what
+// an earlier run generated: the next run of that generator takes it away.
+func (p planner) leftover(fn *types.Func) bool {
 	path := p.fset.Position(fn.Pos()).Filename
-	switch {
-	case writtenBy(path, outputFile, generator):
-		return ok && (p.targets[recv.Obj()] || p.elsewhere(recv.Obj()) && p.marked(recv.Obj(), directiveKey))
-	case writtenBy(path, valueOutputFile, valueGenerator):
-		return ok && p.enum(recv)
+	return writtenBy(path, outputFile, generator) || writtenBy(path, valueOutputFile, valueGenerator)
+}
+
+// isValidate reports whether sig is that of Validate() error.
+func isValidate(sig *types.Signature) bool {
+	return sig.Params().Len() == 0 && sig.Results().Len() == 1 &&
+		types.Identical(sig.Results().At(0).Type(), types.Universe.Lookup("error").Type())
+}
+
+// origin returns the generic type t is an instance of, whose names it shares,
+// or else t.
+func origin(t types.Type) types.Type {
+	if n, ok := t.(*types.Named); ok {
+		return n.Origin()
 	}
-	return true
+	return t
+}
+
+// embedded returns the types t embeds, if it is a struct, without the pointers
+// they may be embedded by.
+func embedded(t types.Type) []types.Type {
+	s, ok := t.Underlying().(*types.Struct)
+	if !ok {
+		return nil
+	}
+	var inner []types.Type
+	for f := range s.Fields() {
+		if !f.Embedded() {
+			continue
+		}
+		e := types.Unalias(f.Type())
+		if ptr, isPtr := e.(*types.Pointer); isPtr {
+			e = types.Unalias(ptr.Elem())
+		}
+		inner = append(inner, e)
+	}
+	return inner
 }
 
 // writtenBy reports whether tool wrote the file at path, which it names name.
