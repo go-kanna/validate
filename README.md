@@ -5,6 +5,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/go-kanna/validate.svg)](https://pkg.go.dev/github.com/go-kanna/validate)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/tag/go-kanna/validate?label=release&sort=semver)](https://github.com/go-kanna/validate/tags)
+[![日本語](https://img.shields.io/badge/lang-%E6%97%A5%E6%9C%AC%E8%AA%9E-blue.svg)](README.ja.md)
 
 kanna-validate generates a `Validate` method from the `validate` tags of a struct — plain `if` statements, no
 reflection — and reports whatever breaks under Rails' error codes, keyed by the fields' JSON names.
