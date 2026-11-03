@@ -139,6 +139,33 @@ type Clash struct {
 			want: "test.go:5:2: error: Clash has a field named Validate, which the generated method would collide with",
 		},
 		{
+			name: "a tag in a struct without a name",
+			src: `package test
+
+//kanna:validate
+type Order struct {
+	Meta struct {
+		Zip string ` + "`validate:\"required\"`" + `
+	}
+}
+`,
+			want: "test.go:6:3: error: Meta.Zip has a validate tag, but a struct without a name gets no Validate, " +
+				"so it is never checked\n  declare the struct as a type of its own, marked //kanna:validate",
+		},
+		{
+			name: "a tag in the elements of a struct without a name",
+			src: `package test
+
+//kanna:validate
+type Order struct {
+	Lines []*struct {
+		SKU string ` + "`validate:\"required\"`" + `
+	}
+}
+`,
+			want: "test.go:6:3: error: Lines.SKU has a validate tag, but a struct without a name gets no Validate",
+		},
+		{
 			name: "hand-written Validate",
 			src: `package test
 

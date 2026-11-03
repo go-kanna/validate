@@ -167,6 +167,11 @@ func (p planner) plan(t target) (plan, []diag.Diag) {
 			diags = append(diags, packages.NotTypeChecked(f.Pos))
 			continue
 		}
+		if rest, ok := ruleAfterPattern(f.Tag); ok {
+			diags = append(diags, diag.Warningf(f.Pos,
+				"pattern= takes the rest of the tag as its regular expression, so %q is part of it (field %s)", rest, f.Name).
+				WithHints("write pattern= last, after the other rules"))
+		}
 		at := site{pkg: own, refs: refs, fields: slices.Delete(slices.Clone(fields), i, i+1)}
 		fp, errs := p.field(f, at)
 		for _, err := range errs {

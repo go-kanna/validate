@@ -4,6 +4,7 @@ import (
 	"go/token"
 	"go/types"
 	"path/filepath"
+	"reflect"
 
 	"github.com/go-kanna/internal/diag"
 	"github.com/go-kanna/internal/directive"
@@ -90,6 +91,7 @@ func checkTarget(fset *token.FileSet, s scan.Struct, d directive.Directive) []di
 			diags = append(diags, diag.Errorf(f.Pos,
 				"%s has a field named Validate, which the generated method would collide with", s.Name))
 		}
+		diags = append(diags, unnamedTags(fset, f.Name, f.Type)...)
 	}
 
 	// The Validate an earlier run generated is about to be replaced; one
@@ -134,6 +136,38 @@ func isErrorsPointer(t types.Type) bool {
 	}
 	named, ok := types.Unalias(ptr.Elem()).(*types.Named)
 	return ok && named.Obj().Name() == "Errors" && named.Obj().Pkg() != nil && named.Obj().Pkg().Path() == runtimePath
+}
+
+// unnamedTags reports the validate tags of the structs without a name that a
+// field at path holds, through pointers, slices, arrays, and maps: no Validate
+// is generated for one, so nothing would check them.
+func unnamedTags(fset *token.FileSet, path string, t types.Type) []diag.Diag {
+	for {
+		switch u := types.Unalias(t).(type) {
+		case *types.Pointer:
+			t = u.Elem()
+		case *types.Slice:
+			t = u.Elem()
+		case *types.Array:
+			t = u.Elem()
+		case *types.Map:
+			t = u.Elem()
+		case *types.Struct:
+			var diags []diag.Diag
+			for i := range u.NumFields() {
+				v, at := u.Field(i), path+"."+u.Field(i).Name()
+				if _, ok, _ := lookup(reflect.StructTag(u.Tag(i))); ok {
+					diags = append(diags, diag.Errorf(fset.Position(v.Pos()),
+						"%s has a validate tag, but a struct without a name gets no Validate, so it is never checked", at).
+						WithHints("declare the struct as a type of its own, marked //kanna:"+directiveKey))
+				}
+				diags = append(diags, unnamedTags(fset, at, v.Type())...)
+			}
+			return diags
+		default:
+			return nil
+		}
+	}
 }
 
 func hasValidateTag(s scan.Struct) bool {

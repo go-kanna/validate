@@ -138,9 +138,12 @@ Where it differs from go-playground:
   does not.
 - A floating-point NaN breaks every comparison it is held to: `min=0` and `max=100` both report it. The generated code
   negates the requirement, `!(x >= 0)`, as `x < 0` would let NaN through.
-- `pattern=` takes the rest of the tag, commas included, so it comes last. The tag value is a Go string literal, so a
-  backslash is written `\\`; a tag that does not unquote stops generation instead of being skipped in silence.
+- `pattern=` takes the rest of the tag, commas included, so it comes last; a rule after it, such as `,max=20`, is
+  warned about as part of the expression. The tag value is a Go string literal, so a backslash is written `\\`; a tag
+  that does not unquote stops generation instead of being skipped in silence.
 - `omitempty` comes first among the rules of its level.
+- A tag on a field of a struct without a name, in `Meta struct{ ... }` or `[]struct{ ... }`, stops generation: only a
+  named type gets a `Validate`, so nothing would check it. Give the struct a name, marked `//kanna:validate`.
 
 `rule=Type` applies the rule of `Type` to the field's value, or to each element after `dive`. `Type` is a value type of
 [kanna-value](#with-kanna-value), known by the shape kanna-value gives it, whose constructor `NewType(T) (Type, error)`
