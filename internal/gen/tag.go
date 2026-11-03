@@ -69,6 +69,32 @@ func parseTag(tag reflect.StructTag) ([]level, error) {
 	return levels, nil
 }
 
+// ruleAfterPattern returns the part of the regular expression of a pattern= in
+// tag that starts like another rule, a comma and the name of one, which the
+// expression takes in all the same.
+func ruleAfterPattern(tag reflect.StructTag) (string, bool) {
+	s, ok, err := lookup(tag)
+	if !ok || err != nil {
+		return "", false
+	}
+	i := strings.Index(","+s, ",pattern=")
+	if i < 0 {
+		return "", false
+	}
+	re := s[i+len("pattern="):]
+	for j := range len(re) {
+		if re[j] != ',' {
+			continue
+		}
+		name, _, _ := strings.Cut(re[j+1:], ",")
+		name, _, _ = strings.Cut(name, "=")
+		if _, ok := resolvers[name]; ok || name == "required" || name == "omitempty" || name == "dive" {
+			return re[j:], true
+		}
+	}
+	return "", false
+}
+
 // lookup returns the validate tag in tag and whether there is one.
 //
 // A tag that is there but is not a valid quoted string is an error. reflect

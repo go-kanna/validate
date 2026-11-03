@@ -154,6 +154,12 @@ func TestPlans_Errors(t *testing.T) {
 			want:  `the validate tag is not a valid quoted string; write a backslash as \\ (field Zip)`,
 		},
 		{
+			name:  "a rule after pattern",
+			field: "Slug string `validate:\"pattern=^[a-z]+$,max=20\"`",
+			want: "test.go:5:2: warning: pattern= takes the rest of the tag as its regular expression, " +
+				"so \",max=20\" is part of it (field Slug)\n  write pattern= last, after the other rules",
+		},
+		{
 			name:  "bad syntax",
 			field: "Name string `validate:\"required,\"`",
 			want:  "empty rule; check for a stray comma (field Name)",
