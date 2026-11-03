@@ -3,7 +3,6 @@ package gen
 import (
 	"flag"
 	"go/token"
-	"go/types"
 	"maps"
 	"path/filepath"
 	"slices"
@@ -47,30 +46,7 @@ func run(dir string, cfg config, patterns []string) ([]output.Change, []diag.Dia
 		roots[pkg.PkgPath] = true
 	}
 
-	// A qualified rule= may name a package of the module that nothing loaded
-	// imports, as the struct's file need not, or one loaded only in part, as
-	// complete explains. Listing the module takes the go command another run,
-	// so it waits for such a rule. What the rule names then has to come from
-	// the same load as the rest, or none of its types would be those the
-	// structs know, so everything is loaded again together.
-	var module map[string]string
-	if quals := unresolved(set.Fset, set.Packages); len(quals) > 0 {
-		var err error
-		if module, err = modulePackages(dir, cfg.tags); err != nil {
-			return nil, []diag.Diag{diag.Errorf(token.Position{}, "%v", err)}
-		}
-		if extra := unloaded(complete(typesOf(set.Packages)), module, quals); len(extra) > 0 {
-			all := patterns
-			if len(all) == 0 {
-				all = []string{"."}
-			}
-			if set, deferred, stop = load(dir, cfg.tags, append(slices.Clip(all), extra...)); stop != nil {
-				return nil, stop
-			}
-		}
-	}
-
-	changes, diags := generate(set, roots, module)
+	changes, diags := generate(set, roots)
 	if diag.HasErrors(diags) {
 		return nil, stopped(set, roots, deferred, diags)
 	}
@@ -122,18 +98,11 @@ func stopped(set packages.Set, roots map[string]bool, deferred, diags []diag.Dia
 
 // generate works out the changes for the packages of set that roots names: the
 // output of each package with targets, and the removal of what an earlier run
-// left in a package without any. The rest of set is what a qualified rule= may
-// name, and module the packages of the user's module, if the run listed them.
-func generate(set packages.Set, roots map[string]bool, module map[string]string) ([]output.Change, []diag.Diag) {
+// left in a package without any.
+func generate(set packages.Set, roots map[string]bool) ([]output.Change, []diag.Diag) {
 	pkgs := slices.DeleteFunc(slices.Clone(set.Packages), func(p *packages.Package) bool { return !roots[p.PkgPath] })
 	found, diags := targets(set.Fset, scan.Structs(pkgs))
-	var local []*types.Package
-	for _, p := range reachable(typesOf(set.Packages)...) {
-		if _, ok := module[p.Path()]; ok || roots[p.Path()] {
-			local = append(local, p)
-		}
-	}
-	planned, ds := plans(set.Fset, found, roots, refScope{pkgs: local, module: module})
+	planned, ds := plans(set.Fset, found, roots)
 	if diags = append(diags, ds...); diag.HasErrors(diags) {
 		return nil, diags
 	}

@@ -211,7 +211,7 @@ func TestCommand_RegeneratesOutputSetAsideUnderCallers(t *testing.T) {
 		{
 			// The output imports model, which moves.
 			name:  "a package the output imports moved",
-			files: map[string]string{"model/model.go": sinceSrc, "app.go": taskSrc("model.Since2000")},
+			files: map[string]string{"model/model.go": sinceSrc, "app.go": taskSrc("model.Since2000", "example.com/app/model")},
 			edit: func(t *testing.T, dir string) {
 				if err := os.MkdirAll(filepath.Join(dir, "domain"), 0o750); err != nil {
 					t.Fatal(err)
@@ -219,6 +219,7 @@ func TestCommand_RegeneratesOutputSetAsideUnderCallers(t *testing.T) {
 				if err := os.Rename(filepath.Join(dir, "model"), filepath.Join(dir, "domain", "model")); err != nil {
 					t.Fatal(err)
 				}
+				writeFile(t, filepath.Join(dir, "app.go"), taskSrc("model.Since2000", "example.com/app/domain/model"))
 				writeFile(t, filepath.Join(dir, "handler.go"),
 					"package app\n\nfunc Check(t Task) error {\n\treturn t.Validate()\n}\n")
 			},

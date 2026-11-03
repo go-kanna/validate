@@ -118,9 +118,17 @@ func (Since2000) Validate(t time.Time) error {
 `
 
 // taskSrc marks a struct whose field Done follows rule, in a file that imports
-// nothing the rule names.
-func taskSrc(rule string) string {
-	return "package app\n\nimport \"time\"\n\n//kanna:validate\ntype Task struct {\n" +
+// time and, as _, the packages at paths, which only the tag names.
+func taskSrc(rule string, paths ...string) string {
+	var imports strings.Builder
+	imports.WriteString("\t\"time\"\n")
+	if len(paths) > 0 {
+		imports.WriteString("\n")
+	}
+	for _, p := range paths {
+		imports.WriteString("\t_ \"" + p + "\"\n")
+	}
+	return "package app\n\nimport (\n" + imports.String() + ")\n\n//kanna:validate\ntype Task struct {\n" +
 		"\tDone *time.Time `json:\"done\" validate:\"rule=" + rule + "\"`\n}\n"
 }
 
@@ -154,11 +162,10 @@ func TestCommand_Generates(t *testing.T) {
 	}
 }
 
-// A rule= may name a package of the module that the struct's file does not
-// import, as Go rejects an import that only a tag mentions; the generated file
-// imports it. As much of the path as it takes tells two packages of one name
-// apart.
-func TestCommand_RuleNamesAPackageOfTheModule(t *testing.T) {
+// A rule= names a package as the struct's file imports it: as _ where only the
+// tag names it, since Go rejects a named import nothing uses, or under the name
+// the file gives it. The generated file imports both as it sees fit.
+func TestCommand_RuleNamesAPackageTheFileImports(t *testing.T) {
 	t.Parallel()
 
 	dir := writeModule(t, map[string]string{
@@ -166,13 +173,20 @@ func TestCommand_RuleNamesAPackageOfTheModule(t *testing.T) {
 		"legacy/model/model.go": sinceSrc,
 		"app.go": `package app
 
-import "time"
+import (
+	"time"
+
+	_ "example.com/app/model"
+	legacy "example.com/app/legacy/model"
+)
+
+var _ legacy.Since2000
 
 //kanna:validate
 type Task struct {
-	Started *time.Time ` + "`json:\"started\" validate:\"rule=app/model.Since2000\"`" + `
-	Done    *time.Time ` + "`json:\"done\"    validate:\"rule=app/model.Since2000\"`" + `
-	Due     *time.Time ` + "`json:\"due\"     validate:\"rule=legacy/model.Since2000\"`" + `
+	Started *time.Time ` + "`json:\"started\" validate:\"rule=model.Since2000\"`" + `
+	Done    *time.Time ` + "`json:\"done\"    validate:\"rule=model.Since2000\"`" + `
+	Due     *time.Time ` + "`json:\"due\"     validate:\"rule=legacy.Since2000\"`" + `
 }
 `,
 	})
@@ -223,9 +237,8 @@ func NewDeadline(t time.Time) (Deadline, error) {
 `
 
 // A rule= may name a value type of kanna-value, whose constructor the
-// generated code calls. A package the struct's package reaches only through
-// another is loaded in part, without the constructor, so the run loads it
-// whole.
+// generated code calls. The struct's file imports its package, so it is loaded
+// whole, constructor and all.
 func TestCommand_RuleNamesAValueType(t *testing.T) {
 	t.Parallel()
 
@@ -237,17 +250,15 @@ func TestCommand_RuleNamesAValueType(t *testing.T) {
 			name: "imported directly",
 			files: map[string]string{
 				"model/model.go": deadlineSrc,
-				"app.go": strings.Replace(taskSrc("model.Deadline"), "import \"time\"",
-					"import (\n\t\"time\"\n\n\t\"example.com/app/model\"\n)\n\nvar _ = model.NewDeadline", 1),
+				"app.go": strings.Replace(taskSrc("model.Deadline"), "\t\"time\"\n",
+					"\t\"time\"\n\n\t\"example.com/app/model\"\n", 1) + "\nvar _ = model.NewDeadline\n",
 			},
 		},
 		{
-			name: "reached only through another package",
+			name: "imported as _",
 			files: map[string]string{
 				"model/model.go": deadlineSrc,
-				"repo/repo.go":   "package repo\n\nimport \"example.com/app/model\"\n\nfunc Due(d model.Deadline) {}\n",
-				"app.go": strings.Replace(taskSrc("model.Deadline"), "import \"time\"",
-					"import (\n\t\"time\"\n\n\t\"example.com/app/repo\"\n)\n\nvar _ = repo.Due", 1),
+				"app.go":         taskSrc("model.Deadline", "example.com/app/model"),
 			},
 		},
 	}
@@ -430,36 +441,31 @@ func TestCommand_Failures(t *testing.T) {
 			want:  "./validate_gen.go: error: has no generated-code header, so it looks hand-written",
 		},
 		{
-			name: "rule naming a package that does not compile",
+			name: "rule naming two packages the file imports alike",
 			files: map[string]string{
-				"app.go": taskSrc("model.Since2000"), "model/model.go": sinceSrc + "\nvar broken int = \"x\"\n",
+				"app.go":         taskSrc("model.Since2000", "example.com/app/model", "example.com/app/legacy/model"),
+				"model/model.go": sinceSrc, "legacy/model/model.go": sinceSrc,
 			},
-			want: `model/model.go:18:18: error: cannot use "x"`,
+			want: "./app.go:12:2: error: rule=model.Since2000: the file imports more than one package named model: " +
+				"example.com/app/model, example.com/app/legacy/model (field Done)\n" +
+				"  a package imported as _ goes by its own name, which these share\n",
 		},
 		{
-			name: "rule naming two packages",
+			name: "rule naming a package the file does not import",
 			files: map[string]string{
-				"app.go": taskSrc("model.Since2000"), "model/model.go": sinceSrc, "legacy/model/model.go": sinceSrc,
+				"app.go": taskSrc("mdoel.Since2000", "example.com/app/model"), "model/model.go": sinceSrc,
 			},
-			want: "./app.go:7:2: error: rule=model.Since2000: model could be any of " +
-				"example.com/app/legacy/model, example.com/app/model (field Done)\n" +
-				"  write as much of the import path as it takes to tell them apart\n",
+			want: "./app.go:11:2: error: rule=mdoel.Since2000: the file imports no package named mdoel (field Done)\n" +
+				"  did you mean model?\n",
 		},
 		{
-			name:  "rule naming no package",
-			files: map[string]string{"app.go": taskSrc("mdoel.Since2000"), "model/model.go": sinceSrc},
-			want: "./app.go:7:2: error: rule=mdoel.Since2000: no package mdoel in your module " +
-				"or among what the struct's package imports (field Done)\n  did you mean \"model\"?\n",
-		},
-		{
-			name: "rule making an import cycle",
+			name: "rule naming a package by its path",
 			files: map[string]string{
-				"app.go": taskSrc("model.Since2000"),
-				"model/model.go": strings.Replace(sinceSrc, "import (", "import (\n\t\"example.com/app\"\n", 1) +
-					"\nvar _ app.Task\n",
+				"app.go": taskSrc("example.com/app/model.Since2000"), "model/model.go": sinceSrc,
 			},
-			want: "./app.go:7:2: error: rule=model.Since2000 would import model, which imports app: an import cycle " +
-				"(field Done)\n",
+			want: "./app.go:9:2: error: rule=example.com/app/model.Since2000: name the package as the file imports it, " +
+				"not by its path (field Done)\n" +
+				"  rule=model.Since2000, importing example.com/app/model as _ if nothing else uses it\n",
 		},
 	}
 

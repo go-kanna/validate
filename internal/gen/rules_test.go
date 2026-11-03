@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-kanna/internal/packages"
 	"github.com/go-kanna/internal/pkgtest"
 
 	"github.com/go-kanna/validate/internal/gen"
@@ -117,11 +118,11 @@ type Checker interface{ Validate(s string) error }
 
 // fields loads rulesSrc and returns its package, and the type of each field of
 // Fields by name.
-func fields(t *testing.T) (*types.Package, map[string]types.Type) {
+func fields(t *testing.T) (*packages.Package, map[string]types.Type) {
 	t.Helper()
 
-	pkg := pkgtest.Load(t, map[string]string{"test.go": rulesSrc}).Types
-	st, ok := pkg.Scope().Lookup("Fields").Type().Underlying().(*types.Struct)
+	pkg := pkgtest.Load(t, map[string]string{"test.go": rulesSrc})
+	st, ok := pkg.Types.Scope().Lookup("Fields").Type().Underlying().(*types.Struct)
 	if !ok {
 		t.Fatal("Fields is not a struct")
 	}
@@ -165,11 +166,9 @@ func TestResolveRule(t *testing.T) {
 		{rule: "url", field: "Kind", want: "rule.URL"},
 		{rule: "uuid", field: "S", want: "rule.UUID"},
 		{rule: "rule=Deadline", field: "When", want: "rule=test.Deadline via NewDeadline"},
-		{rule: "rule=test.Deadline", field: "When", want: "rule=test.Deadline via NewDeadline"},
 		{rule: "rule=level", field: "I", want: "rule=test.level via newLevel"},
 		{rule: "rule=Status", field: "S", want: "rule=test.Status via NewStatus"},
 		{rule: "rule=Past", field: "When", want: "rule=test.Past"},
-		{rule: "rule=test.Past", field: "When", want: "rule=test.Past"},
 		{rule: "rule=Even", field: "I", want: "rule=test.Even"},
 		{rule: "rule=Anything", field: "Sl", want: "rule=test.Anything"},
 		{rule: "rule=IntsWithin", field: "I", want: "rule=test.IntsWithin"},
@@ -247,22 +246,34 @@ func TestResolveRule_Errors(t *testing.T) {
 		{rule: "rule=string", field: "S", wantErr: "rule=string: no such type"},
 		{
 			rule: "rule=tme.Time", field: "When",
-			wantErr:  "rule=tme.Time: no package tme in your module or among what the struct's package imports",
-			wantHint: `did you mean "time"?`,
+			wantErr: "rule=tme.Time: the file imports no package named tme", wantHint: "did you mean time?",
 		},
-		{rule: "rule=time.Tme", field: "When", wantErr: "rule=time.Tme: no such type", wantHint: `did you mean "time.Time"?`},
+		// A package is named as the struct's file imports it, as Go reads a
+		// qualified name in code.
+		{
+			rule: "rule=url.URL", field: "S",
+			wantErr: "rule=url.URL: the file imports no package named url", wantHint: "import it, as _ if nothing else uses it",
+		},
+		{
+			rule: "rule=test.Past", field: "When",
+			wantErr:  "rule=test.Past: the file imports no package named test",
+			wantHint: "a type of the struct's own package goes without one: rule=Past",
+		},
+		{
+			rule: "rule=html/template.Template", field: "S",
+			wantErr:  "rule=html/template.Template: name the package as the file imports it, not by its path",
+			wantHint: "rule=template.Template, importing html/template as _ if nothing else uses it",
+		},
 		{rule: "rule=time.Now", field: "When", wantErr: "rule=time.Now: not a type"},
 		{
 			rule: "rule=template.Template", field: "S",
-			wantErr:  "rule=template.Template: template could be any of html/template, text/template",
-			wantHint: "write as much of the import path as it takes to tell them apart",
+			wantErr: "rule=template.Template: the file imports more than one package named template: " +
+				"html/template, text/template",
+			wantHint: "a package imported as _ goes by its own name, which these share",
 		},
 		{
-			rule: "rule=html/template.Templat", field: "S",
-			wantErr: "rule=html/template.Templat: no such type", wantHint: `did you mean "html/template.Template"?`,
+			rule: "rule=time.Tme", field: "When", wantErr: "rule=time.Tme: no such type", wantHint: `did you mean "time.Time"?`,
 		},
-		// The path tells the two apart, and the one named has no such method.
-		{rule: "rule=text/template.Template", field: "S", wantErr: "rule=text/template.Template has neither a constructor"},
 		{rule: "rule=Within", field: "I", wantErr: "rule=Within: a generic type needs type arguments"},
 		{rule: "rule=Checker", field: "S", wantErr: "rule=Checker: an interface cannot be a rule"},
 		{

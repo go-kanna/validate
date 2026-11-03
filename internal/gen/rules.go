@@ -1,18 +1,21 @@
 package gen
 
 import (
+	"errors"
 	"fmt"
 	"go/constant"
 	"go/token"
 	"go/types"
 	"maps"
 	"math"
+	"path"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/go-kanna/internal/enumtype"
+	"github.com/go-kanna/internal/qualifier"
 	"github.com/go-kanna/internal/suggest"
 	"github.com/go-kanna/internal/valuetype"
 )
@@ -86,8 +89,9 @@ type site struct {
 	// without a qualifier.
 	pkg *types.Package
 
-	// refs is where a qualified rule= looks for its package.
-	refs refScope
+	// imports are how the struct's file calls the packages it imports, which a
+	// qualified rule= names as it does.
+	imports qualifier.Scope
 
 	// fields are the struct's other fields, for eqfield. They are nil below
 	// the field's own level, where eqfield has no field to compare with.
@@ -365,21 +369,6 @@ func typeRule(r rule, t types.Type, at site) (check, error) {
 	return ruleCheck{typ: typ}, nil
 }
 
-// isRule reports whether rule= can name the type obj names, as far as what is
-// loaded of its package tells: a value type or an enum with its constructor, or
-// a type with a rule's Validate.
-func isRule(obj *types.TypeName) bool {
-	if v, ok := valuetype.Of(obj.Type()); ok && v.Constructor != nil {
-		return true
-	}
-	if e, ok := enumtype.Of(obj.Type()); ok && e.Constructor != nil {
-		return true
-	}
-	m, _, _ := types.LookupFieldOrMethod(obj.Type(), false, nil, "Validate")
-	fn, ok := m.(*types.Func)
-	return ok && isRuleMethod(fn.Signature())
-}
-
 // isRuleMethod reports whether sig is that of a rule's Validate: func(T) error.
 func isRuleMethod(sig *types.Signature) bool {
 	return sig.Params().Len() == 1 && !sig.Variadic() && sig.Results().Len() == 1 &&
@@ -578,7 +567,8 @@ func cannotApply(r rule, t types.Type, at site) *ruleError {
 }
 
 // lookupType finds the type that ref, as rule= writes it, names: Type of the
-// struct's package, or pkg.Type of a package at.refs holds.
+// struct's package, or pkg.Type of the package the struct's file imports as
+// pkg.
 func (at site) lookupType(ref string) (*types.TypeName, error) {
 	qual, name, ok := splitRef(ref)
 	if !ok {
@@ -586,12 +576,14 @@ func (at site) lookupType(ref string) (*types.TypeName, error) {
 	}
 	pkg, prefix := at.pkg, ""
 	if qual != "" {
-		var err error
-		if pkg, err = at.refs.pick(ref, qual); err != nil {
-			return nil, err
+		if !token.IsIdentifier(qual) {
+			e := ruleErrorf("rule=%s: name the package as the file imports it, not by its path", ref)
+			e.hint = fmt.Sprintf("rule=%s.%s, importing %s as _ if nothing else uses it", path.Base(qual), name, qual)
+			return nil, e
 		}
-		if pkg.Path() == at.pkg.Path() {
-			pkg = at.pkg
+		var err error
+		if pkg, err = at.qualified(ref, qual, name); err != nil {
+			return nil, err
 		}
 		prefix = qual + "."
 	}
@@ -614,12 +606,24 @@ func (at site) lookupType(ref string) (*types.TypeName, error) {
 	if !ok {
 		return nil, ruleErrorf("rule=%s: not a type", ref)
 	}
-	if pkg != at.pkg && slices.ContainsFunc(reachable(pkg.Imports()...), func(p *types.Package) bool {
-		return p.Path() == at.pkg.Path()
-	}) {
-		return nil, ruleErrorf("rule=%s would import %s, which imports %s: an import cycle", ref, pkg.Name(), at.pkg.Name())
-	}
 	return tn, nil
+}
+
+// qualified returns the package qual names in ref, rule=qual.name: the one the
+// struct's file imports as qual, as Go reads qual.name in code.
+func (at site) qualified(ref, qual, name string) (*types.Package, error) {
+	pkg, err := at.imports.Lookup(qual)
+	if err == nil {
+		return pkg, nil
+	}
+	e := ruleErrorf("rule=%s: %v", ref, err)
+	if qe, ok := errors.AsType[*qualifier.Error](err); ok {
+		e.hint = qe.Hint
+	}
+	if qual == at.pkg.Name() {
+		e.hint = "a type of the struct's own package goes without one: rule=" + name
+	}
+	return nil, e
 }
 
 // typeNames returns, sorted, the names of the types declared in scope.
