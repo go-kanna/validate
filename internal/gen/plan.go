@@ -163,6 +163,15 @@ func (p planner) plan(t target) (plan, []diag.Diag) {
 	pl := plan{target: t}
 	var diags []diag.Diag
 	for i, f := range t.Fields {
+		if f.Name == "_" {
+			// Nothing can read a blank field, so nothing checks it.
+			if _, tagged := f.Tag.Lookup(tagKey); tagged {
+				diags = append(diags, diag.Errorf(f.Pos,
+					"a field named _ cannot be read, so its validate tag would check nothing (field _)").
+					WithHints("give the field a name"))
+			}
+			continue
+		}
 		if packages.Invalid(f.Type) {
 			diags = append(diags, packages.NotTypeChecked(f.Pos))
 			continue

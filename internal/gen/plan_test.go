@@ -135,6 +135,32 @@ func TestPlans(t *testing.T) {
 	}
 }
 
+// A blank field cannot be read, so one of a type that validates itself is left
+// alone rather than checked through x._.
+func TestPlans_BlankField(t *testing.T) {
+	t.Parallel()
+
+	got, diags := plans(t, map[string]string{"test.go": `package test
+
+//kanna:validate
+type Inner struct {
+	Name string ` + "`" + `validate:"required"` + "`" + `
+}
+
+//kanna:validate
+type Outer struct {
+	_     Inner
+	Inner Inner
+}
+`})
+	if len(diags) > 0 {
+		t.Fatalf("diagnostics: %q", diags)
+	}
+	if want := []string{"Inner(Inner): nest"}; !slices.Equal(got["Outer"], want) {
+		t.Errorf("plan of Outer = %q, want %q", got["Outer"], want)
+	}
+}
+
 func TestPlans_Errors(t *testing.T) {
 	t.Parallel()
 
@@ -188,6 +214,12 @@ func TestPlans_Errors(t *testing.T) {
 			name:  "a length outside the bounds",
 			field: "Tags []string `validate:\"len=2,max=1\"`",
 			want:  "no value passes len=2 and max=1 together (field Tags)",
+		},
+		{
+			name:  "a tag on a blank field",
+			field: "_ string `validate:\"required\"`",
+			want: "test.go:5:2: error: a field named _ cannot be read, so its validate tag would check nothing (field _)\n" +
+				"  give the field a name",
 		},
 		{
 			name:  "bad syntax",
