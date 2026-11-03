@@ -160,6 +160,36 @@ func TestPlans_Errors(t *testing.T) {
 				"so \",max=20\" is part of it (field Slug)\n  write pattern= last, after the other rules",
 		},
 		{
+			name:  "a bound given twice",
+			field: "Name string `validate:\"max=5,max=10\"`",
+			want:  "max is given twice; which of max=5 and max=10 is meant? (field Name)",
+		},
+		{
+			name:  "bounds that no number passes",
+			field: "Age int `validate:\"gte=10,lte=5\"`",
+			want:  "no value passes gte=10 and lte=5 together (field Age)",
+		},
+		{
+			name:  "an open bound meeting the other",
+			field: "Ratio float64 `validate:\"gt=1,lte=1\"`",
+			want:  "no value passes gt=1 and lte=1 together (field Ratio)",
+		},
+		{
+			name:  "eq outside the bounds",
+			field: "Age int `validate:\"min=18,eq=7\"`",
+			want:  "no value passes min=18 and eq=7 together (field Age)",
+		},
+		{
+			name:  "lengths that no string passes",
+			field: "Name string `validate:\"min=5,max=3\"`",
+			want:  "no value passes min=5 and max=3 together (field Name)",
+		},
+		{
+			name:  "a length outside the bounds",
+			field: "Tags []string `validate:\"len=2,max=1\"`",
+			want:  "no value passes len=2 and max=1 together (field Tags)",
+		},
+		{
 			name:  "bad syntax",
 			field: "Name string `validate:\"required,\"`",
 			want:  "empty rule; check for a stray comma (field Name)",

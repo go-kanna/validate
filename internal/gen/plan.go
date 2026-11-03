@@ -237,7 +237,10 @@ func (p planner) value(t types.Type, levels []level, at site, enclosing []types.
 		return pruned(v), errs
 	}
 
-	var errs []error
+	var (
+		errs     []error
+		resolved []rule
+	)
 	for _, r := range l.rules {
 		c, err := resolve(r, t, at)
 		if err != nil {
@@ -245,7 +248,9 @@ func (p planner) value(t types.Type, levels []level, at site, enclosing []types.
 			continue
 		}
 		v.checks = append(v.checks, c)
+		resolved = append(resolved, r)
 	}
+	errs = append(errs, conflicts(resolved, v.checks)...)
 
 	path, nest := p.findValidate(t)
 	v.nest = nest

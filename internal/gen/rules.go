@@ -391,25 +391,109 @@ func isRuleMethod(sig *types.Signature) bool {
 // not fit would only fail when the generated code is compiled, far from the tag
 // that caused it.
 func numberBound(r rule, param string, t types.Type, at site) (string, error) {
-	digits := strings.TrimPrefix(param, "-")
-
-	var v constant.Value
-	for _, tok := range []token.Token{token.INT, token.FLOAT} {
-		if v = constant.MakeFromLiteral(digits, tok, 0); v.Kind() != constant.Unknown {
-			break
-		}
-	}
+	v := numberOf(param)
 	if v.Kind() == constant.Unknown {
 		return "", ruleErrorf("rule %q expects a number, got %q", r.name, param)
-	}
-	if digits != param {
-		v = constant.UnaryOp(token.SUB, v, 0)
 	}
 
 	if b, ok := t.Underlying().(*types.Basic); !ok || !fits(v, b) {
 		return "", ruleErrorf("rule %q: %s does not fit %s", r.name, param, at.typeString(t))
 	}
 	return param, nil
+}
+
+// numberOf reads param, a number as a rule writes it, or returns an unknown
+// value.
+func numberOf(param string) constant.Value {
+	digits := strings.TrimPrefix(param, "-")
+	var v constant.Value
+	for _, tok := range []token.Token{token.INT, token.FLOAT} {
+		if v = constant.MakeFromLiteral(digits, tok, 0); v.Kind() != constant.Unknown {
+			break
+		}
+	}
+	if v.Kind() != constant.Unknown && digits != param {
+		v = constant.UnaryOp(token.SUB, v, 0)
+	}
+	return v
+}
+
+// boundRules set one bound each on a number or a length, which a second of the
+// same name at the level would repeat or contradict.
+var boundRules = []string{"min", "max", "len", "eq", "gt", "gte", "lt", "lte"}
+
+// conflicts says why no value passes checks, which rules resolve to at one
+// level, however it is written: a bound given twice, or two bounds that leave
+// no value between them. A range of numbers or lengths is empty only where two
+// of its bounds are, so they are compared two by two.
+func conflicts(rules []rule, checks []check) []error {
+	first := make(map[string]rule)
+	for _, r := range rules {
+		if !slices.Contains(boundRules, r.name) {
+			continue
+		}
+		if f, ok := first[r.name]; ok {
+			return []error{ruleErrorf("%s is given twice; which of %s and %s is meant?", r.name, f, r)}
+		}
+		first[r.name] = r
+	}
+
+	edges := make([]edge, len(checks))
+	for i, c := range checks {
+		switch c := c.(type) {
+		case compareCheck:
+			edges[i] = edge{op: c.op, v: numberOf(c.bound)}
+		case lengthCheck:
+			edges[i] = edge{op: c.op, v: constant.MakeInt64(int64(c.bound))}
+		}
+	}
+	for i := range edges {
+		for j := i + 1; j < len(edges); j++ {
+			if disjoint(edges[i], edges[j]) {
+				return []error{ruleErrorf("no value passes %s and %s together", rules[i], rules[j])}
+			}
+		}
+	}
+	return nil
+}
+
+// edge is a bound a check sets: a value is to compare with v as op says.
+// op is token.ILLEGAL for a check that sets none.
+type edge struct {
+	op token.Token
+	v  constant.Value
+}
+
+// disjoint reports whether no value keeps within both a and b.
+func disjoint(a, b edge) bool {
+	if a.v == nil || b.v == nil || a.v.Kind() == constant.Unknown || b.v.Kind() == constant.Unknown {
+		return false
+	}
+	if a.op == token.EQL {
+		return !b.admits(a.v)
+	}
+	if b.op == token.EQL {
+		return !a.admits(b.v)
+	}
+	lower, upper := a, b
+	if !lower.isLower() {
+		lower, upper = b, a
+	}
+	if !lower.isLower() || !upper.isUpper() {
+		return false
+	}
+	if lower.op == token.GTR || upper.op == token.LSS {
+		return constant.Compare(lower.v, token.GEQ, upper.v)
+	}
+	return constant.Compare(lower.v, token.GTR, upper.v)
+}
+
+func (e edge) isLower() bool { return e.op == token.GEQ || e.op == token.GTR }
+func (e edge) isUpper() bool { return e.op == token.LEQ || e.op == token.LSS }
+
+// admits reports whether v keeps within e, a bound that is not an equality.
+func (e edge) admits(v constant.Value) bool {
+	return !e.isLower() && !e.isUpper() || constant.Compare(v, e.op, e.v)
 }
 
 // fits reports whether the constant v can be held by a value of type b.

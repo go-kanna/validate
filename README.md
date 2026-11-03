@@ -144,6 +144,9 @@ Where it differs from go-playground:
 - `omitempty` comes first among the rules of its level.
 - A tag on a field of a struct without a name, in `Meta struct{ ... }` or `[]struct{ ... }`, stops generation: only a
   named type gets a `Validate`, so nothing would check it. Give the struct a name, marked `//kanna:validate`.
+- A bound given twice at one level, such as `max=5,max=10`, and two bounds no value passes together, such as
+  `gte=10,lte=5`, `gt=1,lte=1`, or `min=18,eq=7`, stop generation: go-playground checks every one, so the field would
+  fail whatever it held.
 
 `rule=Type` applies the rule of `Type` to the field's value, or to each element after `dive`. `Type` is a value type of
 [kanna-value](#with-kanna-value), known by the shape kanna-value gives it, whose constructor `NewType(T) (Type, error)`

@@ -31,6 +31,14 @@ type rule struct {
 	param string
 }
 
+// String spells r as the tag writes it.
+func (r rule) String() string {
+	if r.param == "" {
+		return r.name
+	}
+	return r.name + "=" + r.param
+}
+
 // parseTag reads the validate tag in tag into its levels: the field itself
 // first, then one level per dive. It returns nil when there is no validate tag.
 // It checks the syntax only; whether a rule exists and fits the field is for
