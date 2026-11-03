@@ -5,11 +5,12 @@ import (
 
 	"github.com/go-kanna/internal/deps"
 	"github.com/go-kanna/internal/packages"
+	"github.com/go-kanna/internal/qualifier"
 	"github.com/go-kanna/internal/scan"
 )
 
 // reportDeps tells what a run in dir reads and writes. A qualified rule= names a
-// package no import has to say anything of.
+// package the struct's file imports, by its import path.
 func reportDeps(dir string, cfg config, patterns []string) (deps.Report, error) {
 	set, err := packages.Load(patterns, packages.Config{Dir: dir, Tags: cfg.tags, Regenerated: []string{outputFile}})
 	if err != nil {
@@ -21,9 +22,12 @@ func reportDeps(dir string, cfg config, patterns []string) (deps.Report, error) 
 	for _, t := range found {
 		r.Writes = append(r.Writes, filepath.Join(filepath.Dir(t.Pos.Filename), outputFile))
 		r.Declares = append(r.Declares, t.PkgPath+"."+t.Name+".Validate")
+		imports := qualifier.Of(t.File, t.Named.Obj().Pkg())
 		for _, ref := range ruleRefs(t) {
 			if qual, _, ok := splitRef(ref); ok && qual != "" {
-				r.Refs = append(r.Refs, deps.Ref{Package: qual, Via: "rule=" + ref})
+				if pkg, err := imports.Lookup(qual); err == nil {
+					r.Refs = append(r.Refs, deps.Ref{Package: pkg.Path(), Via: "rule=" + ref})
+				}
 			}
 		}
 	}

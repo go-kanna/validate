@@ -16,8 +16,9 @@ func TestDeps(t *testing.T) {
 	t.Parallel()
 
 	dir := writeModule(t, map[string]string{
-		"p/p.go": "package p\n\n//kanna:validate\ntype In struct {\n\tA string `validate:\"rule=model.Email\"`\n" +
-			"\tB string `validate:\"required\"`\n}\n\nvar _ = In{}.Validate()\n",
+		"model/model.go": "package model\n\ntype Email struct{}\n",
+		"p/p.go": "package p\n\nimport _ \"example.com/app/model\"\n\n//kanna:validate\ntype In struct {\n" +
+			"\tA string `validate:\"rule=model.Email\"`\n\tB string `validate:\"required\"`\n}\n\nvar _ = In{}.Validate()\n",
 	})
 
 	code, stdout, stderr := run(t, filepath.Join(dir, "p"), "-deps")
@@ -38,7 +39,7 @@ func TestDeps(t *testing.T) {
 	if !slices.Equal(r.Declares, []string{"example.com/app/p.In.Validate"}) {
 		t.Errorf("Declares = %q", r.Declares)
 	}
-	want := []deps.Ref{{Package: "model", Via: "rule=model.Email"}}
+	want := []deps.Ref{{Package: "example.com/app/model", Via: "rule=model.Email"}}
 	if !slices.Equal(r.Refs, want) {
 		t.Errorf("Refs = %+v, want %+v", r.Refs, want)
 	}

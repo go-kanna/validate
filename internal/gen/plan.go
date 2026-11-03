@@ -14,6 +14,7 @@ import (
 	"github.com/go-kanna/internal/diag"
 	"github.com/go-kanna/internal/directive"
 	"github.com/go-kanna/internal/packages"
+	"github.com/go-kanna/internal/qualifier"
 	"github.com/go-kanna/internal/scan"
 )
 
@@ -107,10 +108,6 @@ type planner struct {
 	// rewrites, where a Validate an earlier run generated may be about to go.
 	rewritten map[string]bool
 
-	// refs is where a qualified rule= looks for its package, besides among
-	// what the struct's package imports.
-	refs refScope
-
 	// marks caches what marked has read.
 	marks map[mark]bool
 }
@@ -122,15 +119,13 @@ type mark struct {
 }
 
 // plans decides what the Validate method of each target checks. rewritten
-// names the packages whose output this run rewrites, and refs where a qualified
-// rule= looks besides among what the struct's package imports. A target with a
-// rule that does not apply is left out, and said why.
-func plans(fset *token.FileSet, targets []target, rewritten map[string]bool, refs refScope) ([]plan, []diag.Diag) {
+// names the packages whose output this run rewrites. A target with a rule that
+// does not apply is left out, and said why.
+func plans(fset *token.FileSet, targets []target, rewritten map[string]bool) ([]plan, []diag.Diag) {
 	p := planner{
 		fset:      fset,
 		targets:   make(map[*types.TypeName]bool, len(targets)),
 		rewritten: rewritten,
-		refs:      refs,
 		marks:     make(map[mark]bool),
 	}
 	for _, t := range targets {
@@ -159,7 +154,7 @@ func (p planner) plan(t target) (plan, []diag.Diag) {
 	}
 
 	own := t.Named.Obj().Pkg()
-	refs := refScope{pkgs: append(slices.Clip(p.refs.pkgs), reachable(own)...), module: p.refs.module}
+	imports := qualifier.Of(t.File, own)
 	pl := plan{target: t}
 	var diags []diag.Diag
 	for i, f := range t.Fields {
@@ -181,7 +176,7 @@ func (p planner) plan(t target) (plan, []diag.Diag) {
 				"pattern= takes the rest of the tag as its regular expression, so %q is part of it (field %s)", rest, f.Name).
 				WithHints("write pattern= last, after the other rules"))
 		}
-		at := site{pkg: own, refs: refs, fields: slices.Delete(slices.Clone(fields), i, i+1)}
+		at := site{pkg: own, imports: imports, fields: slices.Delete(slices.Clone(fields), i, i+1)}
 		fp, errs := p.field(f, at)
 		for _, err := range errs {
 			diags = append(diags, fieldDiag(f, err))
@@ -271,7 +266,7 @@ func (p planner) value(t types.Type, levels []level, at site, enclosing []types.
 	}
 
 	elem, ok := elemOf(t)
-	elemAt := site{pkg: at.pkg, refs: at.refs}
+	elemAt := site{pkg: at.pkg, imports: at.imports}
 	switch {
 	case len(below) > 0 && !ok:
 		errs = append(errs, ruleErrorf("dive needs a slice, array, or map, not %s", at.typeString(t)))

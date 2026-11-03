@@ -153,11 +153,11 @@ Where it differs from go-playground:
 `rule=Type` applies the rule of `Type` to the field's value, or to each element after `dive`. `Type` is a value type of
 [kanna-value](#with-kanna-value), known by the shape kanna-value gives it, whose constructor `NewType(T) (Type, error)`
 holds a value to its rule; an enum of kanna-value, whose constructor `NewType(string) (Type, error)` accepts only its
-constants; or a type with a method `Validate(T) error`, called on its zero value. A bare `Type` is one of the struct's package. `pkg.Type` names
-the package by its name, among the packages of your module and those the struct's package imports, directly or not;
-`a/pkg.Type`, with as much of the import path as it takes, tells two packages of one name apart. The struct's file need
-not import it, since the generated file does. The generated code records at the field what the constructor or
-`Validate` returns, with the code and params the rule gave it.
+constants; or a type with a method `Validate(T) error`, called on its zero value. A bare `Type` is one of the struct's
+package. `pkg.Type` names its package as Go reads `pkg.Type` in code: by the name the struct's file imports it under.
+Go rejects a named import nothing uses, so a package that only a tag names is imported as `_`, and goes by its own
+name. Nothing else is searched: a package the file does not import is an error, with what to import. The generated code
+records at the field what the constructor or `Validate` returns, with the code and params the rule gave it.
 
 ## Nesting and hooks
 
@@ -256,6 +256,12 @@ type ListOrders struct {
 other than JSON, such as a gRPC message, can take a `*time.Time` and check it as `model.CompletedAt` would:
 
 ```go
+import (
+	"time"
+
+	_ "example.com/app/model"
+)
+
 //kanna:validate
 type UpdateTask struct {
 	CompletedAt *time.Time `json:"completed_at" validate:"rule=model.CompletedAt"` // nil skips it

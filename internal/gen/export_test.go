@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/go-kanna/internal/packages"
+	"github.com/go-kanna/internal/qualifier"
 	"github.com/go-kanna/internal/scan"
 )
 
@@ -38,7 +39,7 @@ func Targets(fset *token.FileSet, pkgs []*packages.Package) ([]string, []string)
 // besides.
 func Emit(fset *token.FileSet, pkgs []*packages.Package, declared []string) ([]byte, error) {
 	found, diags := targets(fset, scan.Structs(pkgs))
-	planned, ds := plans(fset, found, map[string]bool{pkgs[0].PkgPath: true}, refScope{pkgs: typesOf(pkgs)})
+	planned, ds := plans(fset, found, map[string]bool{pkgs[0].PkgPath: true})
 	if diags = append(diags, ds...); len(diags) > 0 {
 		return nil, fmt.Errorf("%v", diags)
 	}
@@ -55,7 +56,7 @@ func Plans(fset *token.FileSet, pkgs []*packages.Package) (map[string][]string, 
 	for _, pkg := range pkgs {
 		rewritten[pkg.PkgPath] = true
 	}
-	planned, ds := plans(fset, found, rewritten, refScope{pkgs: typesOf(pkgs)})
+	planned, ds := plans(fset, found, rewritten)
 	diags = append(diags, ds...)
 
 	spelled := make(map[string][]string, len(planned))
@@ -117,9 +118,9 @@ func NewSibling(name, jsonName string, t types.Type) Sibling {
 // against t, in a struct that pkg declares with fields besides, and spells out
 // the check, as describe does. A qualified rule= may name pkg or what it
 // imports.
-func ResolveRule(written string, t types.Type, pkg *types.Package, fields []Sibling) (string, error) {
+func ResolveRule(written string, t types.Type, pkg *packages.Package, fields []Sibling) (string, error) {
 	name, param, _ := strings.Cut(written, "=")
-	at := site{pkg: pkg, refs: refScope{pkgs: reachable(pkg)}, fields: fields}
+	at := site{pkg: pkg.Types, imports: qualifier.Of(pkg.Syntax[0], pkg.Types), fields: fields}
 	c, err := resolve(rule{name: name, param: param}, t, at)
 	if err != nil {
 		return "", err
