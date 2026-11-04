@@ -224,6 +224,9 @@ func (p planner) value(t types.Type, levels []level, at site, enclosing []types.
 		below = levels[1:]
 	}
 
+	if l.omitEmpty && skipsWhenNil(t) {
+		return nil, []error{omitsNothing(t, at)}
+	}
 	v := &value{typ: t, required: l.required, omitEmpty: l.omitEmpty}
 	if l.required || l.omitEmpty {
 		zero, ok := zeroTestOf(t)
@@ -347,6 +350,29 @@ func hasIsZero(t types.Type) bool {
 	sig := fn.Signature()
 	return sig.Params().Len() == 0 && sig.Results().Len() == 1 &&
 		types.Identical(sig.Results().At(0).Type(), types.Typ[types.Bool])
+}
+
+// skipsWhenNil reports whether a nil value of t skips every rule but required,
+// as a pointer and an interface do, so that omitempty adds nothing.
+func skipsWhenNil(t types.Type) bool {
+	switch t.Underlying().(type) {
+	case *types.Pointer, *types.Interface:
+		return true
+	}
+	return false
+}
+
+// omitsNothing reports omitempty on t, a pointer or an interface, where it does
+// nothing.
+func omitsNothing(t types.Type, at site) *ruleError {
+	kind := "pointer"
+	if types.IsInterface(t) {
+		kind = "interface"
+	}
+	err := ruleErrorf("omitempty does nothing on %s: a nil %s skips every rule but required already",
+		at.typeString(t), kind)
+	err.hint = "remove omitempty"
+	return err
 }
 
 // cannotTellEmpty reports required or omitempty, written in l, on a type whose

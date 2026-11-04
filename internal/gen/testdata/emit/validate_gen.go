@@ -17,6 +17,20 @@ var (
 	patternRequestCode = regexp.MustCompile(`^[A-Z]+$`)
 )
 
+// Validate checks x against the validate tags of Checked. It returns the
+// validate.Errors of every rule x breaks, or nil.
+func (x Checked) Validate() error {
+	var errs validate.Errors
+
+	if x.Check == nil {
+		errs.Add("check", validate.Blank())
+	} else {
+		errs.Nest("check", x.Check.Validate())
+	}
+
+	return errs.Err()
+}
+
 // Validate checks x against the validate tags of Request. It returns the
 // validate.Errors of every rule x breaks, or nil.
 func (x Request) Validate() error {

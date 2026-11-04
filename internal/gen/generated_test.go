@@ -276,6 +276,20 @@ func TestGenerated_CountKeepsTheFieldsType(t *testing.T) {
 
 // NaN compares false with everything, so it meets no bound: each comparison
 // rule reports it, as an infinity beyond the bound.
+// required tests an interface for nil, and only then asks it to validate
+// itself.
+func TestGenerated_RequiredInterface(t *testing.T) {
+	t.Parallel()
+
+	got, err := json.Marshal(emit.Checked{}.Validate())
+	if want := `{"check":[{"error":"blank"}]}`; err != nil || string(got) != want {
+		t.Errorf("Validate() of none reported %s, %v; want %s", got, err, want)
+	}
+	if err := (emit.Checked{Check: validRequest()}).Validate(); err != nil {
+		t.Errorf("Validate() of a valid one = %v, want nil", err)
+	}
+}
+
 func TestGenerated_FloatBounds(t *testing.T) {
 	t.Parallel()
 

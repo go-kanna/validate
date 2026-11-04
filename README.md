@@ -141,7 +141,8 @@ Where it differs from go-playground:
 - `pattern=` takes the rest of the tag, commas included, so it comes last; a rule after it, such as `,max=20`, is
   warned about as part of the expression. The tag value is a Go string literal, so a backslash is written `\\`; a tag
   that does not unquote stops generation instead of being skipped in silence.
-- `omitempty` comes first among the rules of its level.
+- `omitempty` comes first among the rules of its level. On a pointer or an interface it stops generation, as it would
+  do nothing: a nil one skips every rule but `required` already, which go-playground needs `omitempty` for.
 - A tag on a field of a struct without a name, in `Meta struct{ ... }` or `[]struct{ ... }`, stops generation: only a
   named type gets a `Validate`, so nothing would check it. Give the struct a name, marked `//kanna:validate`. So does a
   tag on a field named `_`, which nothing can read; such a field is otherwise left alone, even of a type that validates
