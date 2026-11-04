@@ -119,7 +119,7 @@ The tags are go-playground/validator's; the codes and params are those of Rails'
 | `min`, `max`, `len`                  | strings (in characters), slices, maps | `too_short`, `too_long`, `wrong_length`                                    | `count`                            |
 | `gt`, `gte`, `lt`, `lte`, `eq`, `ne` | numbers                               | `greater_than`, `greater_than_or_equal_to`, `less_than`, ..., `other_than` | `count`                            |
 | `oneof=a b c`                        | strings, integers                     | `inclusion`                                                                |                                    |
-| `eqfield=Field`                      | a field of the same type              | `confirmation`                                                             | `attribute`: the other's JSON name |
+| `eqfield=Field`                      | a field of the same type, or a pointer to it | `confirmation`                                                      | `attribute`: the other's JSON name |
 | `pattern=regexp`                     | strings                               | `invalid`                                                                  |                                    |
 | `email`, `url`, `uuid`               | strings                               | `email`, `url`, `uuid`, from [go-kanna/value](#with-kanna-value)           |                                    |
 | `rule=Type`, `rule=pkg.Type`         | what `Type` holds or validates        | the rule's own                                                             | the rule's own                     |
@@ -134,7 +134,8 @@ Where it differs from go-playground:
   empty slice that is not nil is there; bound its length with `min=1`. A 0 sent is the 0 never sent, so where a 0, or a
   value type whose rule accepts its zero, is a value of its own, take a pointer: `required` then reports only nil.
 - A nil pointer skips every rule but `required`: a `*string` tagged `max=20` accepts nil, one tagged `required,max=20`
-  does not.
+  does not. `eqfield` naming a pointer compares what it points to, as for the rules on one, and a nil one equals no
+  value: a `*string` confirming another is reported when it is set and the other is not.
 - A floating-point NaN breaks every comparison it is held to: `gte=0` and `lte=100` both report it. The generated code
   negates the requirement, `!(x >= 0)`, as `x < 0` would let NaN through.
 - `pattern=` takes the rest of the tag, commas included, so it comes last; a rule after it, such as `,max=20`, is

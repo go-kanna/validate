@@ -50,9 +50,11 @@ type oneOfCheck struct {
 }
 
 // confirmCheck requires the value to equal the struct's field, whose JSON name
-// is attribute.
+// is attribute. When pointer is set, the field is a pointer, and the value has
+// to equal what it points to: a nil one equals no value.
 type confirmCheck struct {
 	field, attribute string
+	pointer          bool
 }
 
 // patternCheck requires a string to match expr.
@@ -276,15 +278,18 @@ func eqField(r rule, t types.Type, at site) (check, error) {
 		return nil, err
 	}
 
+	// A pointer is compared by what it points to, as the rules on one are.
 	other := at.fields[i]
-	if !types.Identical(t, other.typ) {
+	ptr, pointer := other.typ.Underlying().(*types.Pointer)
+	pointer = pointer && types.Identical(t, ptr.Elem())
+	if !pointer && !types.Identical(t, other.typ) {
 		return nil, ruleErrorf("eqfield=%s compares %s with %s, which differ",
 			r.param, at.typeString(t), at.typeString(other.typ))
 	}
 	if !types.Comparable(t) {
 		return nil, ruleErrorf("eqfield=%s cannot compare %s, which is not comparable", r.param, at.typeString(t))
 	}
-	return confirmCheck{field: other.name, attribute: other.jsonName}, nil
+	return confirmCheck{field: other.name, attribute: other.jsonName, pointer: pointer}, nil
 }
 
 func pattern(r rule, t types.Type, at site) (check, error) {

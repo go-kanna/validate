@@ -75,6 +75,8 @@ type Request struct {
 	Code     Role             `json:"code"      validate:"pattern=^[A-Z]+$"`
 	Password string           `json:"password"  validate:"required"`
 	Confirm  string           `json:"confirm"   validate:"eqfield=Password"`
+	NewPass  *string          `json:"new_pass"`
+	NewAgain *string          `json:"new_again" validate:"eqfield=NewPass"`
 	Active   bool             `json:"active"    validate:"required"`
 	When     time.Time        `json:"when"      validate:"required"`
 	Point    Point            `json:"point"     validate:"required"`

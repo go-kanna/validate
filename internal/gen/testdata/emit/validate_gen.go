@@ -139,6 +139,12 @@ func (x Request) Validate() error {
 		errs.Add("confirm", validate.Confirmation("password"))
 	}
 
+	if x.NewAgain != nil {
+		if x.NewPass == nil || *x.NewAgain != *x.NewPass {
+			errs.Add("new_again", validate.Confirmation("new_pass"))
+		}
+	}
+
 	if !x.Active {
 		errs.Add("active", validate.Blank())
 	}

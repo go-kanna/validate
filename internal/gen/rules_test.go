@@ -323,6 +323,7 @@ func TestResolveRule_EqField(t *testing.T) {
 		gen.NewSibling("Password", "password", typeOf["S"]),
 		gen.NewSibling("Age", "age", typeOf["I"]),
 		gen.NewSibling("Tags", "tags", typeOf["Sl"]),
+		gen.NewSibling("NewPassword", "new_password", typeOf["P"]),
 	}
 
 	got, err := gen.ResolveRule("eqfield=Password", typeOf["S"], pkg, siblings)
@@ -331,6 +332,13 @@ func TestResolveRule_EqField(t *testing.T) {
 	}
 	if want := "confirms Password as password"; got != want {
 		t.Errorf("resolve() = %s, want %s", got, want)
+	}
+
+	// A pointer is compared by what it points to, as the rules on one are, so
+	// a *string confirms one too: the value is the string it points to.
+	got, err = gen.ResolveRule("eqfield=NewPassword", typeOf["S"], pkg, siblings)
+	if want := "confirms *NewPassword as new_password"; err != nil || got != want {
+		t.Errorf("resolve() = %s, %v; want %s", got, err, want)
 	}
 
 	tests := []struct {
