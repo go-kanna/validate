@@ -302,10 +302,6 @@ func (m *method) check(c check, t types.Type, at place) {
 		m.printf("%s.Add(%s, %s.%s(%s))\n",
 			m.errs, at.path, m.f.Import(formatRulesPath, "rule"), c.rule, asString(at.expr, t))
 	case ruleCheck:
-		if c.ctor == nil {
-			m.printf("%s.Add(%s, %s.Validate(%s))\n", m.errs, at.path, m.zeroValue(c.typ), at.expr)
-			return
-		}
 		ctor := c.ctor.Name()
 		if q := m.f.Qualifier(c.ctor.Pkg()); q != "" {
 			ctor = q + "." + ctor
@@ -372,26 +368,6 @@ func (m *method) nonZero(v *value, at place) string {
 		return at.expr + " != (" + types.TypeString(v.typ, m.f.Qualifier) + "{})"
 	}
 	panic(fmt.Sprintf("emit: unknown zero test %d", v.zero))
-}
-
-// zeroValue is the zero value of t, a type with methods, as an expression to
-// call them on.
-func (m *method) zeroValue(t types.Type) string {
-	name := types.TypeString(t, m.f.Qualifier)
-	switch u := t.Underlying().(type) {
-	case *types.Struct, *types.Array:
-		return name + "{}"
-	case *types.Basic:
-		switch info := u.Info(); {
-		case info&types.IsString != 0:
-			return name + `("")`
-		case info&types.IsBoolean != 0:
-			return name + "(false)"
-		case info&types.IsNumeric != 0:
-			return name + "(0)"
-		}
-	}
-	return name + "(nil)"
 }
 
 // errVar names the variable holding what a constructor returned, which every

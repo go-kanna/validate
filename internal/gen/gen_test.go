@@ -107,13 +107,15 @@ import (
 	"github.com/go-kanna/validate"
 )
 
-type Since2000 struct{}
+type Since2000 struct{ t time.Time }
 
-func (Since2000) Validate(t time.Time) error {
+func (s Since2000) Time() time.Time { return s.t }
+
+func NewSince2000(t time.Time) (Since2000, error) {
 	if t.Year() < 2000 {
-		return validate.FailWith("too_early", map[string]any{"year": 2000})
+		return Since2000{}, validate.FailWith("too_early", map[string]any{"year": 2000})
 	}
-	return nil
+	return Since2000{t: t}, nil
 }
 `
 
@@ -199,8 +201,8 @@ type Task struct {
 	for _, want := range []string{
 		`"example.com/app/model"`,
 		`model2 "example.com/app/legacy/model"`,
-		`errs.Add("done", model.Since2000{}.Validate(*x.Done))`,
-		`errs.Add("due", model2.Since2000{}.Validate(*x.Due))`,
+		`if _, err := model.NewSince2000(*x.Done); err != nil {`,
+		`if _, err := model2.NewSince2000(*x.Due); err != nil {`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("validate_gen.go does not contain %q:\n%s", want, got)

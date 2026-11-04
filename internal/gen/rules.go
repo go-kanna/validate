@@ -68,9 +68,8 @@ type formatCheck struct {
 	rule string
 }
 
-// ruleCheck runs the rule typ, on the value: the Validate(T) error method of
-// typ, called on its zero value, or, for a value type of kanna-value, ctor, the
-// constructor that holds a value to the type's rule.
+// ruleCheck runs the rule of typ, a value type or an enum of kanna-value, on
+// the value: ctor, the constructor that holds a value to the type's rule.
 type ruleCheck struct {
 	typ  types.Type
 	ctor *types.Func
@@ -351,9 +350,9 @@ func format(funcName string) resolver {
 
 // typeRule resolves rule=Type, which runs the rule of Type on the value. Type
 // is a value type of kanna-value, whose constructor NewType(T) (Type, error)
-// holds a T to the rule, an enum of kanna-value, whose constructor
-// NewType(string) (Type, error) accepts only its constants, or a type whose
-// Validate(T) error accepts or rejects a T, called on its zero value.
+// holds a T to the rule, or an enum of kanna-value, whose constructor
+// NewType(string) (Type, error) accepts only its constants. A rule of the
+// user's own goes in the struct's validate hook.
 func typeRule(r rule, t types.Type, at site) (check, error) {
 	if err := needsValue(r); err != nil {
 		return nil, err
@@ -384,31 +383,11 @@ func typeRule(r rule, t types.Type, at site) (check, error) {
 		return ruleCheck{typ: typ, ctor: e.Constructor}, nil
 	}
 
-	m, _, indirect := types.LookupFieldOrMethod(typ, false, nil, "Validate")
-	fn, ok := m.(*types.Func)
-	if !ok || !isRuleMethod(fn.Signature()) {
-		newFunc, _ := valuetype.Constructors(obj.Name())
-		err := ruleErrorf("rule=%s has neither a constructor %s(%s) (%s, error), as kanna-value generates, "+
-			"nor a method Validate(%s) error",
-			r.param, newFunc, at.typeString(t), obj.Name(), at.typeString(t))
-		switch {
-		case ok:
-			err.hint = "its Validate is " + at.typeString(fn.Signature())
-		case indirect:
-			err.hint = "its Validate has a pointer receiver; give it a value receiver, as the rule is called on its zero value"
-		}
-		return nil, err
-	}
-	if param := fn.Signature().Params().At(0).Type(); !types.AssignableTo(t, param) {
-		return nil, ruleErrorf("rule=%s validates %s, not %s", r.param, at.typeString(param), at.typeString(t))
-	}
-	return ruleCheck{typ: typ}, nil
-}
-
-// isRuleMethod reports whether sig is that of a rule's Validate: func(T) error.
-func isRuleMethod(sig *types.Signature) bool {
-	return sig.Params().Len() == 1 && !sig.Variadic() && sig.Results().Len() == 1 &&
-		types.Identical(sig.Results().At(0).Type(), types.Universe.Lookup("error").Type())
+	newFunc, _ := valuetype.Constructors(obj.Name())
+	e := ruleErrorf("rule=%s has no constructor %s(%s) (%s, error), as kanna-value generates for a value type or an enum",
+		r.param, newFunc, at.typeString(t), obj.Name())
+	e.hint = "for a rule of your own, check the value in the struct's validate(errs *validate.Errors)"
+	return nil, e
 }
 
 // numberBound checks that param, a number written in the tag, is one t can

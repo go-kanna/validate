@@ -125,7 +125,7 @@ The tags are go-playground/validator's; the codes and params are those of Rails'
 | `eqfield=Field`                      | a field of the same type, or a pointer to it | `confirmation`                                                      | `attribute`: the other's JSON name |
 | `pattern=regexp`                     | strings                               | `invalid`                                                                  |                                    |
 | `email`, `url`, `uuid`               | strings                               | `email`, `url`, `uuid`, from [go-kanna/value](#with-kanna-value)           |                                    |
-| `rule=Type`, `rule=pkg.Type`         | what `Type` holds or validates        | the rule's own                                                             | the rule's own                     |
+| `rule=Type`, `rule=pkg.Type`         | what `Type` holds                     | the rule's own                                                             | the rule's own                     |
 | `omitempty`                          | anything with a zero value            | lets the zero value past the rules after it                                |                                    |
 | `dive`                               | slices, arrays, maps                  | applies the rules after it to each element, or each value of a map         |                                    |
 
@@ -166,12 +166,13 @@ Where it differs from go-playground:
 
 `rule=Type` applies the rule of `Type` to the field's value, or to each element after `dive`. `Type` is a value type of
 [kanna-value](#with-kanna-value), known by the shape kanna-value gives it, whose constructor `NewType(T) (Type, error)`
-holds a value to its rule; an enum of kanna-value, whose constructor `NewType(string) (Type, error)` accepts only its
-constants; or a type with a method `Validate(T) error`, called on its zero value. A bare `Type` is one of the struct's
+holds a value to its rule; or an enum of kanna-value, whose constructor `NewType(string) (Type, error)` accepts only its
+constants. A rule of your own goes in the struct's `validate` method (see [Nesting and hooks](#nesting-and-hooks)),
+which a function shared between structs can serve. A bare `Type` is one of the struct's
 package. `pkg.Type` names its package as Go reads `pkg.Type` in code: by the name the struct's file imports it under.
 Go rejects a named import nothing uses, so a package that only a tag names is imported as `_`, and goes by its own
 name. Nothing else is searched: a package the file does not import is an error, with what to import. The generated code
-records at the field what the constructor or `Validate` returns, with the code and params the rule gave it.
+records at the field what the constructor returns, with the code and params the rule gave it.
 
 ## Nesting and hooks
 
