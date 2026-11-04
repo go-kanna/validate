@@ -199,7 +199,8 @@ func (m *method) value(v *value, at place, depth int) {
 	if v.nest {
 		call := fmt.Sprintf("%s.Nest(%s, %s.Validate())\n", m.errs, at.nestPath, at.recv)
 		var tests []string
-		if types.IsInterface(v.typ) {
+		if types.IsInterface(v.typ) && !v.required && !v.omitEmpty {
+			// Unless required or omitempty has tested it for nil already.
 			tests = append(tests, at.expr+" != nil")
 		}
 		for _, selector := range v.nilable {

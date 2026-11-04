@@ -248,6 +248,19 @@ func TestPlans_Errors(t *testing.T) {
 			want:  "omitempty cannot tell whether struct{S []string} is empty (field Bags)",
 		},
 		{
+			// A nil pointer or interface skips every rule but required anyway.
+			name:  "omitempty on a pointer",
+			field: "Site *string `validate:\"omitempty,max=20\"`",
+			want: "omitempty does nothing on *string: a nil pointer skips every rule but required already (field Site)\n" +
+				"  remove omitempty",
+		},
+		{
+			name:  "omitempty on an interface",
+			field: "Err error `validate:\"omitempty\"`",
+			want: "omitempty does nothing on error: a nil interface skips every rule but required already (field Err)\n" +
+				"  remove omitempty",
+		},
+		{
 			name:  "eqfield after dive",
 			field: "Tags []string `validate:\"dive,eqfield=Other\"`\n\tOther string",
 			want:  "eqfield applies to the field itself, not to the elements after dive (field Tags)",

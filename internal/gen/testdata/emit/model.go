@@ -42,6 +42,14 @@ func (s Span) Validate() error {
 // Checker is an interface whose values validate themselves.
 type Checker interface{ Validate() error }
 
+// Checked has to hold a Checker, which required tests for nil before it is
+// asked to validate itself.
+//
+//kanna:validate
+type Checked struct {
+	Check Checker `json:"check" validate:"required"`
+}
+
 // Tree contains itself, and nothing in it validates itself.
 type Tree map[string]Tree
 
