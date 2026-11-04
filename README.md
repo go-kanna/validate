@@ -148,6 +148,9 @@ Where it differs from go-playground:
   stops generation, saying so; each rule then means one thing, as `gte` on a string stops it too.
 - `omitempty` comes first among the rules of its level. On a pointer or an interface it stops generation, as it would
   do nothing: a nil one skips every rule but `required` already, which go-playground needs `omitempty` for.
+- `omitempty` is the other side of `required`: it lets the zero value past, and nothing else. An empty slice or map
+  that is not nil is no zero value, so `omitempty,min=1` reports `[]string{}`, as go-playground does. It is what
+  encoding/json/v2 calls `omitzero`, not its `omitempty`, which leaves out an empty value.
 - A tag on a field of a struct without a name, in `Meta struct{ ... }` or `[]struct{ ... }`, stops generation: only a
   named type gets a `Validate`, so nothing would check it. Give the struct a name, marked `//kanna:validate`. So does a
   tag on a field named `_`, which nothing can read; such a field is otherwise left alone, even of a type that validates
