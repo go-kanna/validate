@@ -22,6 +22,16 @@ import (
 
 type Role string
 
+// Stage is an enum, a string type with constants declared beside it, of which
+// one is unexported, as it can be in the package declaring it.
+type Stage string
+
+const (
+	StagePending Stage = "pending"
+	StageShipped Stage = "shipped"
+	stageHeld    Stage = "held"
+)
+
 type Age uint8
 
 type Fields struct {
@@ -40,6 +50,7 @@ type Fields struct {
 	I8    int8
 	U16   uint16
 	R     rune
+	St    Stage
 }
 
 // Deadline is a value type as kanna-value generates one, down to what rule=
@@ -161,6 +172,7 @@ func TestResolveRule(t *testing.T) {
 		{rule: "ne=0", field: "F", want: "!=0"},
 		{rule: "oneof=admin member", field: "Kind", want: `oneof("admin","member")`},
 		{rule: "oneof=1 2", field: "I", want: "oneof(1,2)"},
+		{rule: "oneof=pending held", field: "St", want: `oneof("pending","held")`},
 		{rule: `pattern=^\d{3}-\d{4}$`, field: "S", want: `pattern(^\d{3}-\d{4}$)`},
 		{rule: "email", field: "S", want: "rule.Email"},
 		{rule: "url", field: "Kind", want: "rule.URL"},
@@ -233,6 +245,10 @@ func TestResolveRule_Errors(t *testing.T) {
 		{rule: "gt=0", field: "B", wantErr: `rule "gt" cannot apply to bool`},
 		{rule: "oneof=1 2", field: "F", wantErr: `rule "oneof" cannot apply to float64`},
 		{rule: "oneof=a b a", field: "S", wantErr: `rule "oneof" lists a twice`},
+		{
+			rule: "oneof=pending shippd", field: "St",
+			wantErr: `rule "oneof" lists shippd, which no constant of Stage holds`, wantHint: `did you mean "shipped"?`,
+		},
 		{rule: "oneof=1 300", field: "Years", wantErr: "300 does not fit Age"},
 		{rule: "pattern=[a-z", field: "S", wantErr: "invalid pattern: error parsing regexp: missing closing ]"},
 		{rule: "pattern=^a$", field: "I", wantErr: `rule "pattern" cannot apply to int`},

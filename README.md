@@ -152,6 +152,9 @@ Where it differs from go-playground:
 - A bound given twice at one level, such as `max=5,max=10`, and two bounds no value passes together, such as
   `gte=10,lte=5`, `gt=1,lte=1`, or `gte=18,eq=7`, stop generation: go-playground checks every one, so the field would
   fail whatever it held.
+- `oneof` on an enum of kanna-value lists the values of its constants, of those it exports for an enum of another
+  package, which is all that is loaded of it for certain. A value that is none of them, a typo of one say, stops
+  generation, as the field could never hold it.
 
 `rule=Type` applies the rule of `Type` to the field's value, or to each element after `dive`. `Type` is a value type of
 [kanna-value](#with-kanna-value), known by the shape kanna-value gives it, whose constructor `NewType(T) (Type, error)`
