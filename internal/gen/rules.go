@@ -254,7 +254,37 @@ func oneOf(r rule, t types.Type, at site) (check, error) {
 		}
 		lits = append(lits, lit)
 	}
+	if e, ok := enumtype.Of(t); ok {
+		consts := enumValues(e.Named, at.pkg)
+		for _, v := range values {
+			if slices.Contains(consts, v) {
+				continue
+			}
+			err := ruleErrorf("rule %q lists %s, which no constant of %s holds", r.name, v, at.typeString(t))
+			if s, ok := suggest.Closest(v, consts); ok {
+				err.hint = fmt.Sprintf("did you mean %q?", s)
+			}
+			return nil, err
+		}
+	}
 	return oneOfCheck{values: lits}, nil
+}
+
+// enumValues returns, sorted, the values of the constants of named, an enum,
+// that pkg can see: all of them in the package declaring it, and those it
+// exports elsewhere, which is all that is loaded of another package for
+// certain.
+func enumValues(named *types.Named, pkg *types.Package) []string {
+	var values []string
+	scope := named.Obj().Pkg().Scope()
+	for _, name := range scope.Names() {
+		c, ok := scope.Lookup(name).(*types.Const)
+		if ok && c.Val().Kind() == constant.String && types.Identical(c.Type(), named) && (c.Exported() || c.Pkg() == pkg) {
+			values = append(values, constant.StringVal(c.Val()))
+		}
+	}
+	slices.Sort(values)
+	return slices.Compact(values)
 }
 
 func eqField(r rule, t types.Type, at site) (check, error) {
