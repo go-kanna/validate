@@ -224,6 +224,9 @@ the rejection is reported at the field's path, alongside whatever the tags find 
 this; it stops at the first rejection, and does not say which field it came from. `DecodeJSON` decodes through
 encoding/json/v2, which matches names case-sensitively and rejects duplicate names.
 
+What it decodes into has to validate itself, as a struct marked `//kanna:validate` does, one without a rule included:
+a struct left unmarked does not compile, rather than pass unchecked.
+
 ## With kanna-value
 
 [kanna-value](https://github.com/go-kanna/value) generates value types that hold a value to its rule wherever it goes:

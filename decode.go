@@ -14,15 +14,17 @@ import (
 )
 
 // DecodeJSON decodes the JSON value r holds into v, which must be a non-nil
-// pointer, and reports everything wrong with it at once.
+// pointer, and reports everything wrong with it at once. v has to validate
+// itself, as a struct marked //kanna:validate does, so that a struct left
+// unmarked does not pass unchecked.
 //
 // A value whose type rejects it with a Coded error, as the value types of
 // kanna-value do, does not stop the decoding: the error is recorded at the
 // value's path and decoding goes on. The rejection may come from any method
 // encoding/json/v2 decodes a type with: UnmarshalJSONFrom, UnmarshalJSON, or
-// UnmarshalText. Then, when v has a Validate method, what it finds is added,
-// except at and under the paths decoding rejected. Those values were never set,
-// and checking them would only report the absence of a value that was in fact
+// UnmarshalText. Then what the Validate method of v finds is added, except at
+// and under the paths decoding rejected. Those values were never set, and
+// checking them would only report the absence of a value that was in fact
 // sent.
 //
 // The result is the Errors of both, or nil. Anything else fails with
@@ -33,7 +35,7 @@ import (
 //
 // Decoding follows encoding/json/v2, which, unlike encoding/json, matches names
 // case-sensitively and rejects duplicate names.
-func DecodeJSON(r io.Reader, v any) error {
+func DecodeJSON(r io.Reader, v interface{ Validate() error }) error {
 	var d decoding
 	err := json.UnmarshalRead(r, v, json.WithUnmarshalers(json.JoinUnmarshalers(
 		// In the order encoding/json/v2 prefers the methods.
@@ -45,12 +47,8 @@ func DecodeJSON(r io.Reader, v any) error {
 		return fmt.Errorf("validate: %w", err)
 	}
 
-	x, ok := v.(interface{ Validate() error })
-	if !ok {
-		return d.errs.Err()
-	}
 	var found Errors
-	found.Nest("", x.Validate())
+	found.Nest("", v.Validate())
 	for _, fe := range found {
 		if !slices.ContainsFunc(d.rejected, func(path string) bool { return within(fe.Field, path) }) {
 			d.errs = append(d.errs, fe)

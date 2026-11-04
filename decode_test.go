@@ -39,6 +39,10 @@ func (r *role) UnmarshalText(text []byte) error {
 	return validate.Inclusion()
 }
 
+// Validate finds nothing: only decoding is under test where a role is decoded
+// alone.
+func (role) Validate() error { return nil }
+
 // period stands in for a type written for encoding/json/v2, which decodes
 // itself from the decoder. It rejects a period that ends before it starts.
 type period struct {
@@ -214,15 +218,15 @@ func TestDecodeJSON_TopLevel(t *testing.T) {
 
 	tests := []struct {
 		name string
-		v    any
+		v    interface{ Validate() error }
 		in   string
 		want validate.Errors
 	}{
 		{
-			name: "without Validate",
-			v:    new(email),
-			in:   `"x"`,
-			want: validate.Errors{{Field: validate.Base, Err: &typeError{code: "email"}}},
+			name: "rejected while decoding",
+			v:    new(role),
+			in:   `"root"`,
+			want: validate.Errors{{Field: validate.Base, Err: validate.Inclusion()}},
 		},
 		{
 			// Nothing was set, so whatever Validate finds is left out.
@@ -245,26 +249,12 @@ func TestDecodeJSON_TopLevel(t *testing.T) {
 	}
 }
 
-func TestDecodeJSON_WithoutValidate(t *testing.T) {
-	t.Parallel()
-
-	var got address
-	err := validate.DecodeJSON(strings.NewReader(`{"zip":"x"}`), &got)
-
-	want := validate.Errors{{Field: "zip", Err: &typeError{code: "email"}}}
-	if errs, ok := errors.AsType[validate.Errors](err); !ok || !equalErrors(errs, want) {
-		t.Errorf("DecodeJSON() error = %v, want %v", err, want)
-	}
-}
-
 func TestDecodeJSON_LeavesTimeToEncodingJSON(t *testing.T) {
 	t.Parallel()
 
 	// encoding/json/v2 sets a time to zero on null, where Time.UnmarshalJSON
 	// would leave it as it was.
-	got := struct {
-		At time.Time `json:"at"`
-	}{At: time.Unix(1, 0)}
+	got := stamped{At: time.Unix(1, 0)}
 	if err := validate.DecodeJSON(strings.NewReader(`{"at":null}`), &got); err != nil {
 		t.Fatalf("DecodeJSON() error = %v, want nil", err)
 	}
@@ -272,6 +262,24 @@ func TestDecodeJSON_LeavesTimeToEncodingJSON(t *testing.T) {
 		t.Errorf("At = %v, want the zero time", got.At)
 	}
 }
+
+// stamped holds a time, with nothing to validate.
+type stamped struct {
+	At time.Time `json:"at"`
+}
+
+func (stamped) Validate() error { return nil }
+
+// roleCounts is a map keyed by roles, with nothing to validate.
+type roleCounts map[role]int
+
+func (roleCounts) Validate() error { return nil }
+
+// partway holds a value rejected before it is read whole, with nothing to
+// validate.
+type partway struct{ X impatient }
+
+func (partway) Validate() error { return nil }
 
 // impatient rejects a value before it has read all of it.
 type impatient struct{}
@@ -288,7 +296,7 @@ func TestDecodeJSON_Unreadable(t *testing.T) {
 
 	tests := []struct {
 		name string
-		v    any
+		v    interface{ Validate() error }
 		in   string
 		as   func(error) bool
 	}{
@@ -324,13 +332,13 @@ func TestDecodeJSON_Unreadable(t *testing.T) {
 		},
 		{
 			name: "a rejected map key",
-			v:    new(map[role]int),
+			v:    new(roleCounts),
 			in:   `{"root":1}`,
 			as:   isError[*json.SemanticError],
 		},
 		{
 			name: "a rejection partway through a value",
-			v:    new(struct{ X impatient }),
+			v:    new(partway),
 			in:   `{"X":[1,2]}`,
 			as:   isError[*json.SemanticError],
 		},
