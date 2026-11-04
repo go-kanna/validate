@@ -170,33 +170,34 @@ func resolve(r rule, t types.Type, at site) (check, error) {
 	return nil, err
 }
 
-// size resolves min, max, and len: the length of a string, slice, or map, or a
-// number itself.
+// comparing names the rule comparing a number as each of min, max, and len
+// bounds a length.
+var comparing = map[string]string{"min": "gte", "max": "lte", "len": "eq"}
+
+// size resolves min, max, and len: the length of a string, slice, or map. A
+// number is compared by gte, lte, and eq instead, so that each rule means one
+// thing.
 func size(op token.Token) resolver {
 	return func(r rule, t types.Type, at site) (check, error) {
 		if err := needsValue(r); err != nil {
 			return nil, err
 		}
 
-		switch s := shapeOf(t); {
-		case s == shapeString || s == shapeSlice || s == shapeMap:
+		switch s := shapeOf(t); s {
+		case shapeString, shapeSlice, shapeMap:
 			n, err := strconv.Atoi(r.param)
 			if err != nil || n < 0 {
 				return nil, ruleErrorf("rule %q expects a length, got %q", r.name, r.param)
 			}
 			return lengthCheck{op: op, bound: n, runes: s == shapeString}, nil
-		case s == shapeArray:
+		case shapeArray:
 			return nil, ruleErrorf("rule %q cannot apply to %s, whose length is fixed", r.name, at.typeString(t))
-		case s == shapeNumber && r.name == "len":
+		case shapeNumber:
 			err := ruleErrorf("rule %q cannot apply to %s", r.name, at.typeString(t))
-			err.hint = "len measures strings, slices, and maps; compare a number with eq"
+			err.hint = fmt.Sprintf("%s measures strings, slices, and maps; compare a number with %s",
+				r.name, comparing[r.name])
 			return nil, err
-		case s == shapeNumber:
-			bound, err := numberBound(r, r.param, t, at)
-			if err != nil {
-				return nil, err
-			}
-			return compareCheck{op: op, bound: bound}, nil
+		case shapeOther:
 		}
 		return nil, cannotApply(r, t, at)
 	}

@@ -202,8 +202,8 @@ func TestPlans_Errors(t *testing.T) {
 		},
 		{
 			name:  "eq outside the bounds",
-			field: "Age int `validate:\"min=18,eq=7\"`",
-			want:  "no value passes min=18 and eq=7 together (field Age)",
+			field: "Age int `validate:\"gte=18,eq=7\"`",
+			want:  "no value passes gte=18 and eq=7 together (field Age)",
 		},
 		{
 			name:  "lengths that no string passes",
