@@ -290,8 +290,12 @@ func (m *method) check(c check, t types.Type, at place) {
 		}
 		m.printf("if %s {\n%s\n}\n", strings.Join(conds, " && "), m.add(at.path, "Inclusion()"))
 	case confirmCheck:
-		m.printf("if %s != %s.%s {\n%s\n}\n", at.expr, m.x, c.field,
-			m.add(at.path, "Confirmation("+strconv.Quote(c.attribute)+")"))
+		other := m.x + "." + c.field
+		test := at.expr + " != " + other
+		if c.pointer {
+			test = other + " == nil || " + at.expr + " != *" + other
+		}
+		m.printf("if %s {\n%s\n}\n", test, m.add(at.path, "Confirmation("+strconv.Quote(c.attribute)+")"))
 	case patternCheck:
 		m.printf("if !%s.MatchString(%s) {\n%s\n}\n", m.patterns[c.expr], asString(at.expr, t), m.add(at.path, "Invalid()"))
 	case formatCheck:

@@ -290,6 +290,40 @@ func TestGenerated_RequiredInterface(t *testing.T) {
 	}
 }
 
+// eqfield compares a pointer by what it points to, and a nil one equals no
+// value.
+func TestGenerated_ConfirmsThroughPointers(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		pass, again *string
+		want        bool // confirmation reported
+	}{
+		{name: "neither"},
+		{name: "the same, held apart", pass: new("new secret"), again: new("new secret")},
+		{name: "another", pass: new("new secret"), again: new("old secret"), want: true},
+		{name: "none to confirm", again: new("new secret"), want: true},
+		{name: "nothing confirming it", pass: new("new secret")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			r := validRequest()
+			r.NewPass, r.NewAgain = tt.pass, tt.again
+			err := r.Validate()
+			if got := err != nil; got != tt.want {
+				t.Errorf("Validate() = %v, want an error %t", err, tt.want)
+			}
+			errs, ok := errors.AsType[validate.Errors](err)
+			if tt.want && (!ok || len(errs) != 1 || errs[0].Field != "new_again") {
+				t.Errorf("Validate() = %v, want the confirmation of new_again alone", err)
+			}
+		})
+	}
+}
+
 func TestGenerated_FloatBounds(t *testing.T) {
 	t.Parallel()
 

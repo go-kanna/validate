@@ -150,6 +150,9 @@ func describe(c check) string {
 	case oneOfCheck:
 		return "oneof(" + strings.Join(c.values, ",") + ")"
 	case confirmCheck:
+		if c.pointer {
+			return "confirms *" + c.field + " as " + c.attribute
+		}
 		return "confirms " + c.field + " as " + c.attribute
 	case patternCheck:
 		return "pattern(" + c.expr + ")"
