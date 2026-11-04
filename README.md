@@ -8,7 +8,7 @@
 [![日本語](https://img.shields.io/badge/lang-%E6%97%A5%E6%9C%AC%E8%AA%9E-blue.svg)](README.ja.md)
 
 kanna-validate generates a `Validate` method from the `validate` tags of a struct — plain `if` statements, no
-reflection — and reports whatever breaks under Rails' error codes, keyed by the fields' JSON names.
+reflection — and reports whatever breaks as error codes, keyed by the fields' JSON names.
 
 Part of the [kanna](https://go-kanna.github.io/) family of code generators. Requires Go 1.27, for
 encoding/json/v2.

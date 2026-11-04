@@ -7,7 +7,7 @@
 [![Release](https://img.shields.io/github/v/tag/go-kanna/validate?label=release&sort=semver)](https://github.com/go-kanna/validate/tags)
 [![English](https://img.shields.io/badge/lang-English-blue.svg)](README.md)
 
-kanna-validate は、構造体の `validate` タグから `Validate` メソッドを生成します。生成されるのは素の `if` 文で、リフレクションは使いません。破られたルールは、Rails のエラーコードで、フィールドの JSON 名をキーにして報告します。
+kanna-validate は、構造体の `validate` タグから `Validate` メソッドを生成します。生成されるのは素の `if` 文で、リフレクションは使いません。破られたルールは、フィールドの JSON 名をキーにしたエラーコードで報告します。
 
 [kanna](https://go-kanna.github.io/ja/) コードジェネレータファミリーの 1 つです。encoding/json/v2 を使うため、Go 1.27 以上が必要です。
 
