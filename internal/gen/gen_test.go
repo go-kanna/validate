@@ -608,7 +608,7 @@ func TestCommand_Usage(t *testing.T) {
 		"kanna-validate: generate Validate methods from the validate tags of structs marked //kanna:validate",
 		"kanna-validate [flags] [packages]",
 		"//go:generate go tool kanna-validate needs no argument",
-		"-tags string",
+		"-tags tags",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("usage = %q, want it to contain %q", stdout, want)
