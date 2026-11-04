@@ -56,6 +56,7 @@ type Request struct {
 	Shifts   []time.Time      ` + "`json:\"shifts\" validate:\"dive,rule=Past\"`" + `
 	Ignored  string           ` + "`json:\"ignored\"`" + `
 	Audit
+	Stamp ` + "`json:\"-\"`" + `
 }
 
 type Point struct{ X, Y int }
@@ -86,6 +87,14 @@ func (Past) Validate(t time.Time) error { return nil }
 //kanna:validate
 type Audit struct {
 	By string ` + "`json:\"by\" validate:\"required\"`" + `
+}
+
+// Stamp is embedded under json:"-", which encoding/json leaves out rather
+// than flattens.
+//
+//kanna:validate
+type Stamp struct {
+	At string ` + "`json:\"at\" validate:\"required\"`" + `
 }
 `
 
@@ -124,9 +133,11 @@ func TestPlans(t *testing.T) {
 			`Done(done): *{rule=test.Past}`,
 			`Shifts(shifts): []{rule=test.Past}`,
 			`Audit(Audit,flatten): nest`,
+			`Stamp(Stamp): nest`,
 		},
 		"Address": {`Zip(zip): required=="" pattern(^\d{3}-\d{4}$)`},
 		"Audit":   {`By(by): required==""`},
+		"Stamp":   {`At(at): required==""`},
 	}
 	for _, name := range slices.Sorted(maps.Keys(want)) {
 		if !slices.Equal(got[name], want[name]) {

@@ -189,8 +189,11 @@ func (p planner) plan(t target) (plan, []diag.Diag) {
 }
 
 func (p planner) field(f scan.Field, at site) (fieldPlan, []error) {
+	// encoding/json flattens an embedded struct without a JSON name, and
+	// leaves out one tagged json:"-", which goes under its Go name as any field
+	// tagged so does.
 	path, named := jsonName(f)
-	fp := fieldPlan{name: f.Name, path: path, flatten: f.Embedded && !named}
+	fp := fieldPlan{name: f.Name, path: path, flatten: f.Embedded && !named && f.Tag.Get("json") != "-"}
 
 	levels, err := parseTag(f.Tag)
 	if err != nil {

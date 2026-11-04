@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"bytes"
 	"cmp"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
@@ -108,7 +109,31 @@ func Index(field string, i int) string {
 // "labels.primary": a map is a JSON object, so its keys are spelled as the
 // names of an object are, as DecodeJSON reports them.
 func Key[K comparable](field string, key K) string {
-	return field + "." + fmt.Sprint(key)
+	return field + "." + keyName(key)
+}
+
+// keyName spells key as Marshal names it in an object: a string as it is, and
+// anything else as the key of a map, which a String method has no say in.
+func keyName[K comparable](key K) string {
+	switch k := any(key).(type) {
+	case string:
+		return k
+	case int:
+		return strconv.Itoa(k)
+	}
+	b, err := json.Marshal(map[K]struct{}{key: {}})
+	if err != nil {
+		return fmt.Sprint(key)
+	}
+	dec := jsontext.NewDecoder(bytes.NewReader(b))
+	if _, err := dec.ReadToken(); err != nil {
+		return fmt.Sprint(key)
+	}
+	name, err := dec.ReadToken()
+	if err != nil {
+		return fmt.Sprint(key)
+	}
+	return name.String()
 }
 
 // Err returns e, or nil when nothing broke. Returning e itself would hand the
