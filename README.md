@@ -102,11 +102,14 @@ $ go generate ./...
   did you mean "Password"?
 ```
 
-A misspelled directive, which would otherwise leave the struct without a `Validate` and say nothing, draws a warning:
+A misspelled directive, which would otherwise leave the struct without a `Validate` and say nothing, draws a warning,
+and so does one a blank line keeps from the struct, which is then no doc comment of it:
 
 ```console
 ./request.go:3:1: warning: "//kanna:validte" is not recognized as a directive
   did you mean "//kanna:validate"?
+./request.go:9:1: warning: //kanna:validate is not attached to a declaration, so nothing reads it
+  write it right above what it marks, with no blank line between
 ```
 
 ## Rules

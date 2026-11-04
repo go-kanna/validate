@@ -513,6 +513,22 @@ type Contact struct {
 	}
 }
 
+// A //kanna:validate a blank line keeps from its struct marks nothing, which
+// is told at the line.
+func TestCommand_WarnsOfALooseDirective(t *testing.T) {
+	t.Parallel()
+
+	dir := writeModule(t, map[string]string{
+		"app.go": "package app\n\n//kanna:validate\n\ntype Signup struct {\n\tName string `validate:\"required\"`\n}\n",
+	})
+	_, _, stderr := run(t, dir)
+	want := "./app.go:3:1: warning: //kanna:validate is not attached to a declaration, so nothing reads it\n" +
+		"  write it right above what it marks, with no blank line between\n"
+	if !strings.Contains(stderr, want) {
+		t.Errorf("stderr = %q, want it to contain %q", stderr, want)
+	}
+}
+
 func TestCommand_WarnsWhenNothingIsMarked(t *testing.T) {
 	t.Parallel()
 

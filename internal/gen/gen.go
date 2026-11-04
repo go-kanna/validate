@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-kanna/internal/cli"
 	"github.com/go-kanna/internal/diag"
+	"github.com/go-kanna/internal/directive"
 	"github.com/go-kanna/internal/output"
 	"github.com/go-kanna/internal/packages"
 	"github.com/go-kanna/internal/scan"
@@ -102,6 +103,9 @@ func stopped(set packages.Set, roots map[string]bool, deferred, diags []diag.Dia
 func generate(set packages.Set, roots map[string]bool) ([]output.Change, []diag.Diag) {
 	pkgs := slices.DeleteFunc(slices.Clone(set.Packages), func(p *packages.Package) bool { return !roots[p.PkgPath] })
 	found, diags := targets(set.Fset, scan.Structs(pkgs))
+	for _, pkg := range pkgs {
+		diags = append(diags, directive.Loose(directive.Lines(set.Fset, pkg.Syntax), directiveKey)...)
+	}
 	planned, ds := plans(set.Fset, found, roots)
 	if diags = append(diags, ds...); diag.HasErrors(diags) {
 		return nil, diags
