@@ -146,8 +146,10 @@ Where it differs from go-playground:
   that does not unquote stops generation instead of being skipped in silence.
 - `min`, `max`, and `len` bound a length only. A number is compared with `gte`, `lte`, and `eq`, and `min=18` on one
   stops generation, saying so; each rule then means one thing, as `gte` on a string stops it too.
-- `omitempty` comes first among the rules of its level. On a pointer or an interface it stops generation, as it would
-  do nothing: a nil one skips every rule but `required` already, which go-playground needs `omitempty` for.
+- `omitempty` comes first among the rules of its level, as it lets the zero value past those after it. The other rules
+  of a level go in any order, but for `dive`, which applies those after it to each element, and `pattern=`, which takes
+  the rest. On a pointer or an interface it stops generation, as it would do nothing: a nil one skips every rule but
+  `required` already, which go-playground needs `omitempty` for.
 - `omitempty` is the other side of `required`: it lets the zero value past, and nothing else. An empty slice or map
   that is not nil is no zero value, so `omitempty,min=1` reports `[]string{}`, as go-playground does. It is what
   encoding/json/v2 calls `omitzero`, not its `omitempty`, which leaves out an empty value.
