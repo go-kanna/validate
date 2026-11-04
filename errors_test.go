@@ -7,6 +7,7 @@ import (
 	"errors"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -111,6 +112,18 @@ func TestErrors_Nest(t *testing.T) {
 	}
 }
 
+// level has a String method, which encoding/json does not name a key by.
+type level int
+
+func (l level) String() string { return "level " + strconv.Itoa(int(l)) }
+
+// span names a key by its text, as encoding/json does.
+type span struct{ from, to int }
+
+func (s span) MarshalText() ([]byte, error) {
+	return []byte(strconv.Itoa(s.from) + "-" + strconv.Itoa(s.to)), nil
+}
+
 func TestPaths(t *testing.T) {
 	t.Parallel()
 
@@ -121,6 +134,8 @@ func TestPaths(t *testing.T) {
 		{got: validate.Key("labels", "primary"), want: "labels.primary"},
 		{got: validate.Key("scores", 7), want: "scores.7"},
 		{got: validate.Index(validate.Key("groups", "admin"), 0), want: "groups.admin[0]"},
+		{got: validate.Key("levels", level(1)), want: "levels.1"},
+		{got: validate.Key("ranges", span{1, 3}), want: "ranges.1-3"},
 	}
 	for _, tt := range tests {
 		if tt.got != tt.want {

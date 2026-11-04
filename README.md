@@ -175,11 +175,13 @@ records at the field what the constructor or `Validate` returns, with the code a
 
 A field whose type has `Validate() error` — another `//kanna:validate` struct, an enum of kanna-value, a type validating
 itself by hand, an interface — is validated with it, and its errors are nested under the field: `address.zip`,
-`items[2].sku`, or `labels.primary` for a map. Slices, arrays, and maps of such types are validated element by element without a `dive`.
+`items[2].sku`, or `labels.primary` for a map, whose key is spelled as encoding/json names it, which a `String` method
+has no say in. Slices, arrays, and maps of such types are validated element by element without a `dive`.
 A type with `Validate` through an embedded pointer or interface is validated only when that is not nil, as a nil pointer
 in a field is skipped. Generation stops when another package does not export what would have to be tested for it.
 An embedded struct without a JSON name keeps its errors at the level of the struct embedding it, as encoding/json
-flattens its fields.
+flattens its fields. One tagged `json:"-"`, which encoding/json leaves out instead, keeps them under its Go name, as any
+field tagged so does.
 
 A rule no tag can express, such as one spanning two fields, goes in a `validate` method, which the generated `Validate`
 calls after every tag has been checked:
