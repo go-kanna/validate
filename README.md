@@ -173,8 +173,9 @@ records at the field what the constructor or `Validate` returns, with the code a
 
 ## Nesting and hooks
 
-A field whose type has `Validate() error` — another `//kanna:validate` struct, an enum of kanna-value, a type validating
-itself by hand, an interface — is validated with it, and its errors are nested under the field: `address.zip`,
+A field whose type has `Validate() error`, or is to have one — another `//kanna:validate` struct, a string type marked
+`//kanna:enum`, whose `Validate` kanna-value writes, a type validating itself by hand, an interface — is validated with
+it, and its errors are nested under the field: `address.zip`,
 `items[2].sku`, or `labels.primary` for a map, whose key is spelled as encoding/json names it, which a `String` method
 has no say in. Slices, arrays, and maps of such types are validated element by element without a `dive`.
 A type with `Validate` through an embedded pointer or interface is validated only when that is not nil, as a nil pointer

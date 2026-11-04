@@ -442,7 +442,7 @@ func (p planner) findValidate(t types.Type) ([]*types.Var, bool) {
 // once the generators have run, and whether that is a Validate() error.
 func (p planner) ownValidate(t types.Type) (named, callable bool) {
 	if n, ok := t.(*types.Named); ok {
-		if obj := n.Obj(); p.targets[obj] || p.elsewhere(obj) && p.marked(obj, directiveKey) || p.enum(n) {
+		if obj := n.Obj(); p.targets[obj] || p.elsewhere(obj) && p.marked(obj, directiveKey) || p.valueWritesValidate(n) {
 			return true, true
 		}
 		for m := range n.Methods() {
@@ -575,10 +575,12 @@ func writtenBy(path, name, tool string) bool {
 	return false
 }
 
-// enum reports whether named is an enum of kanna-value: a string type that is
-// marked, as nothing writes Validate on the rest. Its constants are no part of
-// telling, as export data may leave them out.
-func (p planner) enum(named *types.Named) bool {
+// valueWritesValidate reports whether kanna-value writes the Validate of
+// named, which it does for a string type marked //kanna:enum, and which may
+// not be written yet. It is no test of what an enum is, which rule= and oneof
+// take from enumtype, as every generator does: the mark tells what kanna-value
+// is to write, and constants, which export data may leave out, do not.
+func (p planner) valueWritesValidate(named *types.Named) bool {
 	return named.TypeParams().Len() == 0 && types.Identical(named.Underlying(), types.Typ[types.String]) &&
 		p.marked(named.Obj(), enumKey)
 }
