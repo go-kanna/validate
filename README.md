@@ -117,7 +117,6 @@ The tags are go-playground/validator's; the codes and params are those of Rails'
 |--------------------------------------|---------------------------------------|----------------------------------------------------------------------------|------------------------------------|
 | `required`                           | anything with a zero value            | `blank`                                                                    |                                    |
 | `min`, `max`, `len`                  | strings (in characters), slices, maps | `too_short`, `too_long`, `wrong_length`                                    | `count`                            |
-| `min`, `max`                         | numbers                               | `greater_than_or_equal_to`, `less_than_or_equal_to`                        | `count`                            |
 | `gt`, `gte`, `lt`, `lte`, `eq`, `ne` | numbers                               | `greater_than`, `greater_than_or_equal_to`, `less_than`, ..., `other_than` | `count`                            |
 | `oneof=a b c`                        | strings, integers                     | `inclusion`                                                                |                                    |
 | `eqfield=Field`                      | a field of the same type              | `confirmation`                                                             | `attribute`: the other's JSON name |
@@ -136,11 +135,13 @@ Where it differs from go-playground:
   value type whose rule accepts its zero, is a value of its own, take a pointer: `required` then reports only nil.
 - A nil pointer skips every rule but `required`: a `*string` tagged `max=20` accepts nil, one tagged `required,max=20`
   does not.
-- A floating-point NaN breaks every comparison it is held to: `min=0` and `max=100` both report it. The generated code
+- A floating-point NaN breaks every comparison it is held to: `gte=0` and `lte=100` both report it. The generated code
   negates the requirement, `!(x >= 0)`, as `x < 0` would let NaN through.
 - `pattern=` takes the rest of the tag, commas included, so it comes last; a rule after it, such as `,max=20`, is
   warned about as part of the expression. The tag value is a Go string literal, so a backslash is written `\\`; a tag
   that does not unquote stops generation instead of being skipped in silence.
+- `min`, `max`, and `len` bound a length only. A number is compared with `gte`, `lte`, and `eq`, and `min=18` on one
+  stops generation, saying so; each rule then means one thing, as `gte` on a string stops it too.
 - `omitempty` comes first among the rules of its level. On a pointer or an interface it stops generation, as it would
   do nothing: a nil one skips every rule but `required` already, which go-playground needs `omitempty` for.
 - A tag on a field of a struct without a name, in `Meta struct{ ... }` or `[]struct{ ... }`, stops generation: only a
@@ -148,7 +149,7 @@ Where it differs from go-playground:
   tag on a field named `_`, which nothing can read; such a field is otherwise left alone, even of a type that validates
   itself.
 - A bound given twice at one level, such as `max=5,max=10`, and two bounds no value passes together, such as
-  `gte=10,lte=5`, `gt=1,lte=1`, or `min=18,eq=7`, stop generation: go-playground checks every one, so the field would
+  `gte=10,lte=5`, `gt=1,lte=1`, or `gte=18,eq=7`, stop generation: go-playground checks every one, so the field would
   fail whatever it held.
 
 `rule=Type` applies the rule of `Type` to the field's value, or to each element after `dive`. `Type` is a value type of
