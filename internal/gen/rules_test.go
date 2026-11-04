@@ -92,37 +92,13 @@ type Off struct{}
 
 func NewOff(s string) Off { return Off{} }
 
-// Past is a rule type, whose Validate accepts or rejects a time.
+// Past validates a time with a method of its own, which makes no rule.
 type Past struct{}
 
 func (Past) Validate(t time.Time) error { return nil }
 
-// Even is a rule declared on an integer.
-type Even int
-
-func (Even) Validate(n int) error { return nil }
-
-// Anything accepts a value of any type.
-type Anything struct{}
-
-func (Anything) Validate(v any) error { return nil }
-
-// Within needs a type argument, which IntsWithin gives it.
-type Within[T any] struct{}
-
-func (Within[T]) Validate(v T) error { return nil }
-
-type IntsWithin = Within[int]
-
-// Strict declares its Validate on a pointer receiver.
-type Strict struct{}
-
-func (*Strict) Validate(s string) error { return nil }
-
-// Loose has a Validate that is not a rule's.
-type Loose struct{}
-
-func (Loose) Validate(s string) bool { return true }
+// Within needs a type argument.
+type Within[T any] struct{ v T }
 
 type Checker interface{ Validate(s string) error }
 `
@@ -180,10 +156,6 @@ func TestResolveRule(t *testing.T) {
 		{rule: "rule=Deadline", field: "When", want: "rule=test.Deadline via NewDeadline"},
 		{rule: "rule=level", field: "I", want: "rule=test.level via newLevel"},
 		{rule: "rule=Status", field: "S", want: "rule=test.Status via NewStatus"},
-		{rule: "rule=Past", field: "When", want: "rule=test.Past"},
-		{rule: "rule=Even", field: "I", want: "rule=test.Even"},
-		{rule: "rule=Anything", field: "Sl", want: "rule=test.Anything"},
-		{rule: "rule=IntsWithin", field: "I", want: "rule=test.IntsWithin"},
 	}
 
 	for _, tt := range tests {
@@ -200,6 +172,9 @@ func TestResolveRule(t *testing.T) {
 		})
 	}
 }
+
+// ownRule is the hint of a rule= naming a type that is no rule.
+const ownRule = "for a rule of your own, check the value in the struct's validate(errs *validate.Errors)"
 
 func TestResolveRule_Errors(t *testing.T) {
 	t.Parallel()
@@ -296,29 +271,26 @@ func TestResolveRule_Errors(t *testing.T) {
 		{rule: "rule=Checker", field: "S", wantErr: "rule=Checker: an interface cannot be a rule"},
 		{
 			rule: "rule=time.Time", field: "When",
-			wantErr: "rule=time.Time has neither a constructor NewTime(time.Time) (Time, error), as kanna-value generates, " +
-				"nor a method Validate(time.Time) error",
+			wantErr: "rule=time.Time has no constructor NewTime(time.Time) (Time, error), " +
+				"as kanna-value generates for a value type or an enum",
+			wantHint: ownRule,
 		},
-		{rule: "rule=Off", field: "S", wantErr: "rule=Off has neither a constructor NewOff(string) (Off, error)"},
+		{rule: "rule=Off", field: "S", wantErr: "rule=Off has no constructor NewOff(string) (Off, error)", wantHint: ownRule},
 		{
 			rule: "rule=Plain", field: "When",
-			wantErr: "rule=Plain has neither a constructor NewPlain(time.Time) (Plain, error)",
+			wantErr: "rule=Plain has no constructor NewPlain(time.Time) (Plain, error)", wantHint: ownRule,
 		},
 		{rule: "rule=Deadline", field: "S", wantErr: "rule=Deadline holds time.Time, not string"},
 		{rule: "rule=Status", field: "Kind", wantErr: "rule=Status takes a string, not Role"},
 		{rule: "rule=Status", field: "I", wantErr: "rule=Status takes a string, not int"},
-		{rule: "rule=Bare", field: "S", wantErr: "rule=Bare has neither a constructor NewBare(string) (Bare, error)"},
 		{
-			rule: "rule=Strict", field: "S",
-			wantErr: "nor a method Validate(string) error", wantHint: "its Validate has a pointer receiver",
+			rule: "rule=Bare", field: "S", wantErr: "rule=Bare has no constructor NewBare(string) (Bare, error)",
+			wantHint: ownRule,
 		},
 		{
-			rule: "rule=Loose", field: "S",
-			wantErr: "nor a method Validate(string) error", wantHint: "its Validate is func(s string) bool",
+			rule: "rule=Past", field: "When", wantErr: "rule=Past has no constructor NewPast(time.Time) (Past, error)",
+			wantHint: ownRule,
 		},
-		{rule: "rule=Past", field: "S", wantErr: "rule=Past validates time.Time, not string"},
-		// The field's type is named as the struct's source names it.
-		{rule: "rule=Even", field: "Years", wantErr: "rule=Even validates int, not Age"},
 	}
 
 	for _, tt := range tests {

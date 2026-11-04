@@ -230,7 +230,9 @@ func (x Request) Validate() error {
 	}
 
 	if x.DoneAt != nil {
-		errs.Add("done_at", schedule.Since2000{}.Validate(*x.DoneAt))
+		if _, err := schedule.NewSince2000(*x.DoneAt); err != nil {
+			errs.Add("done_at", err)
+		}
 	}
 
 	if x.Due != nil {
@@ -246,7 +248,9 @@ func (x Request) Validate() error {
 	}
 
 	for i := range x.Shifts {
-		errs.Add(validate.Index("shifts", i), Since2000{}.Validate(x.Shifts[i]))
+		if _, err := schedule.NewSince2000(x.Shifts[i]); err != nil {
+			errs.Add(validate.Index("shifts", i), err)
+		}
 	}
 
 	errs.Nest("", x.Audit.Validate())

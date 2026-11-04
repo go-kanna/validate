@@ -159,11 +159,7 @@ func describe(c check) string {
 	case formatCheck:
 		return "rule." + c.rule
 	case ruleCheck:
-		spelled := "rule=" + types.TypeString(c.typ, (*types.Package).Name)
-		if c.ctor != nil {
-			spelled += " via " + c.ctor.Name()
-		}
-		return spelled
+		return "rule=" + types.TypeString(c.typ, (*types.Package).Name) + " via " + c.ctor.Name()
 	}
 	return fmt.Sprintf("%#v", c)
 }

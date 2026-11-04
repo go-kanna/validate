@@ -79,10 +79,12 @@ func (Checked) Validate(strict bool) error { return nil }
 // Tree contains itself, and nothing in it validates itself.
 type Tree map[string]Tree
 
-// Past is a rule type, whose Validate accepts or rejects a time.
-type Past struct{}
+// Past is a value type, whose constructor holds a time to its rule.
+type Past struct{ t time.Time }
 
-func (Past) Validate(t time.Time) error { return nil }
+func (p Past) Time() time.Time { return p.t }
+
+func NewPast(t time.Time) (Past, error) { return Past{t: t}, nil }
 
 //kanna:validate
 type Audit struct {
@@ -130,8 +132,8 @@ func TestPlans(t *testing.T) {
 			`Grid(grid): []{nest}`,
 			`Matrix(matrix): []{[]{>=0}}`,
 			`Picks(picks): *{[]{required==""}}`,
-			`Done(done): *{rule=test.Past}`,
-			`Shifts(shifts): []{rule=test.Past}`,
+			`Done(done): *{rule=test.Past via NewPast}`,
+			`Shifts(shifts): []{rule=test.Past via NewPast}`,
 			`Audit(Audit,flatten): nest`,
 			`Stamp(Stamp): nest`,
 		},

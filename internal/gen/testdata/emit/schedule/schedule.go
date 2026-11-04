@@ -1,5 +1,5 @@
-// Package schedule declares a rule type and a value type, for validate tags in
-// package emit to name with rule=.
+// Package schedule declares value types, for validate tags in package emit to
+// name with rule=.
 package schedule
 
 import (
@@ -8,14 +8,16 @@ import (
 	"github.com/go-kanna/validate"
 )
 
-// Since2000 accepts a time in 2000 or later.
-type Since2000 struct{}
+// Since2000 holds a time in 2000 or later, as a value type of kanna-value.
+type Since2000 struct{ t time.Time }
 
-func (Since2000) Validate(t time.Time) error {
+func (s Since2000) Time() time.Time { return s.t }
+
+func NewSince2000(t time.Time) (Since2000, error) {
 	if t.Year() < 2000 {
-		return validate.FailWith("too_early", map[string]any{"year": 2000})
+		return Since2000{}, validate.FailWith("too_early", map[string]any{"year": 2000})
 	}
-	return nil
+	return Since2000{t: t}, nil
 }
 
 // Deadline is a value type as kanna-value generates one, down to what rule=
