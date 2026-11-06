@@ -156,6 +156,15 @@ func (x CreateUserRequest) validate(errs *validate.Errors) {
 
 構造体全体に関するエラーは、Rails と同じく `validate.Base`（`"base"`）の下に置きます。
 
+kanna-validate は、生成するときに、フックがエラーを置くパスを検査します。対象は、渡された `Errors` の `Add` と `Nest` の第 1 引数のうち、定数のものと、定数に `validate.Index` や `validate.Key` を使ったものです。パスは、構造体のエラーの名前と同じ読み方で辿ります。フィールドはそのエラーが置かれる名前で、要素は `[0]` で、マップのキーは `.` の後で辿り、どこで終わっても、`base` で終わってもかまいません。どう読んでも何も指さないパスがあれば、生成を止めます:
+
+```text
+user.go:42:11: error: "aeg" is not a path of CreateUserRequest: CreateUserRequest has no field "aeg"
+  did you mean "age"?
+```
+
+`validate.Key` が書くキーは `.` を含みうるので、マップの先は見ません。kanna-validate が `Validate` を書かない型と、インターフェースの先も、何を報告するかはその `Validate` 次第なので見ません。そのような型を JSON 名なしで埋め込んでいれば、その階層のどの名前も報告しません。`Add("")` も生成を止めます。構造体全体のエラーは `validate.Base` に置きます。`Nest("")` は、埋め込み構造体と同じく、ネストしたものを構造体の階層に置くので通します。`validate.Index("items", i) + ".sku"` のように実行時に組み立てるパスは検査しません。
+
 ## エラー
 
 `Validate` は `validate.Errors` か nil を返します。これは Rails が `errors.details` をエンコードするのと同じ形式にエンコードされ、フィールドは最初にルールが破られた順に並びます:

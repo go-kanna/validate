@@ -165,7 +165,7 @@ func (e *emitter) method(p plan) {
 		m.value(fp.value, place{expr: expr, recv: expr, path: path, nestPath: nestPath}, 0)
 	}
 
-	if p.hook {
+	if p.hook != nil {
 		fmt.Fprintf(e.f, "\n%s.validate(&%s)\n", m.x, m.errs)
 	}
 	fmt.Fprintf(e.f, "\nreturn %s.Err()\n}\n\n", m.errs)

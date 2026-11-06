@@ -33,9 +33,9 @@ const runtimePath = "github.com/go-kanna/validate"
 type target struct {
 	scan.Struct
 
-	// hook reports whether the struct declares a validate(*validate.Errors)
-	// method, which the generated Validate calls last.
-	hook bool
+	// hook is the validate(*validate.Errors) method the struct declares, which
+	// the generated Validate calls last, or nil.
+	hook *types.Func
 }
 
 // targets returns the structs marked //kanna:validate that a Validate method
@@ -106,26 +106,26 @@ func checkTarget(fset *token.FileSet, s scan.Struct, d directive.Directive) []di
 	return diags
 }
 
-// hookOf reports whether s declares a validate method for the generated
-// Validate to call, and says why one by that name cannot be called.
+// hookOf returns the validate method s declares for the generated Validate to
+// call, or nil, and says why one by that name cannot be called.
 //
 // Only a method declared on s itself counts. One promoted from an embedded
 // struct belongs to that struct's own Validate, which the generated code calls
 // already.
-func hookOf(fset *token.FileSet, s scan.Struct) (bool, []diag.Diag) {
+func hookOf(fset *token.FileSet, s scan.Struct) (*types.Func, []diag.Diag) {
 	for m := range s.Named.Methods() {
 		if m.Name() != "validate" {
 			continue
 		}
 		sig := m.Signature()
 		if sig.Params().Len() == 1 && sig.Results().Len() == 0 && isErrorsPointer(sig.Params().At(0).Type()) {
-			return true, nil
+			return m, nil
 		}
-		return false, []diag.Diag{diag.Errorf(fset.Position(m.Pos()),
+		return nil, []diag.Diag{diag.Errorf(fset.Position(m.Pos()),
 			"%s.validate must be func(*validate.Errors) for the generated Validate to call it", s.Name).
 			WithHints("rename it if it is not meant to be called from Validate")}
 	}
-	return false, nil
+	return nil, nil
 }
 
 // isErrorsPointer reports whether t is *validate.Errors of the runtime.

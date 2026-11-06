@@ -23,7 +23,7 @@ func Targets(fset *token.FileSet, pkgs []*packages.Package) ([]string, []string)
 	names := make([]string, len(found))
 	for i, t := range found {
 		names[i] = t.Name
-		if t.hook {
+		if t.hook != nil {
 			names[i] += " (hook)"
 		}
 	}
