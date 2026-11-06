@@ -10,7 +10,7 @@ tool (
 )
 
 require (
-	github.com/go-kanna/validate v0.0.23
+	github.com/go-kanna/validate v0.0.24
 	github.com/go-kanna/value v0.0.12
 )
 
