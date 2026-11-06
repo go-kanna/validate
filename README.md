@@ -200,6 +200,22 @@ func (x CreateUserRequest) validate(errs *validate.Errors) {
 
 An error concerning the struct as a whole goes under `validate.Base`, `"base"`, as in Rails.
 
+kanna-validate checks, as it generates, the paths the hook puts errors under: the first argument of `Add` and `Nest` on
+the `Errors` it is given, when it is a constant, or `validate.Index` or `validate.Key` of one. A path is read as the
+errors of the struct are named: through fields, by the names their errors go under, elements as `[0]`, and keys after a
+dot, and it may end at any of them, or in `base`. Generation stops at a path no reading of which names anything:
+
+```text
+user.go:42:11: error: "aeg" is not a path of CreateUserRequest: CreateUserRequest has no field "aeg"
+  did you mean "age"?
+```
+
+A key, as `validate.Key` writes it, may hold a dot, so what follows a map is not checked. Neither is what follows a
+value whose `Validate` kanna-validate does not write, or an interface, as what it reports is up to it; when one is
+embedded without a JSON name, no name at that level is reported. `Add("")` stops generation too, as an error on the
+struct as a whole goes under `validate.Base`, while `Nest("")` keeps what it nests at the level of the struct, as for an
+embedded struct. A path made at run time, such as `validate.Index("items", i) + ".sku"`, is not checked.
+
 ## Errors
 
 `Validate` returns `validate.Errors`, or nil. It encodes as Rails encodes `errors.details`, with the fields in the order

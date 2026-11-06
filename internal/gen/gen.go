@@ -74,7 +74,8 @@ func run(dir string, cfg config, patterns []string) ([]output.Change, []diag.Dia
 // the run: it is deferred, for packages.Recheck to tell, once the output is in
 // place, whether it remains.
 func load(dir, tags string, patterns []string) (set packages.Set, deferred, stop []diag.Diag) {
-	set, err := packages.Load(patterns, packages.Config{Dir: dir, Tags: tags, Regenerated: []string{outputFile}})
+	cfg := packages.Config{Dir: dir, Tags: tags, TypesInfo: true, Regenerated: []string{outputFile}}
+	set, err := packages.Load(patterns, cfg)
 	if err != nil {
 		return set, nil, []diag.Diag{diag.Errorf(token.Position{}, "%v", err)}
 	}
@@ -103,6 +104,7 @@ func stopped(set packages.Set, roots map[string]bool, deferred, diags []diag.Dia
 func generate(set packages.Set, roots map[string]bool) ([]output.Change, []diag.Diag) {
 	pkgs := slices.DeleteFunc(slices.Clone(set.Packages), func(p *packages.Package) bool { return !roots[p.PkgPath] })
 	found, diags := targets(set.Fset, scan.Structs(pkgs))
+	diags = append(diags, hookPaths(set.Fset, pkgs, found)...)
 	for _, pkg := range pkgs {
 		diags = append(diags, directive.Loose(directive.Lines(set.Fset, pkg.Syntax), directiveKey)...)
 	}
