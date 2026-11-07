@@ -239,3 +239,20 @@ func (Target) validate(*Errors) {}
 		})
 	}
 }
+
+// kanna-config checks the validate tags of a struct it reads, so they are not
+// left unchecked.
+func TestTargets_ReadByConfig(t *testing.T) {
+	t.Parallel()
+
+	names, diags := targets(t, map[string]string{"test.go": `package test
+
+//kanna:config
+type Database struct {
+	WriterURL string ` + "`validate:\"required\"`" + `
+}
+`})
+	if len(names) > 0 || len(diags) > 0 {
+		t.Errorf("targets = %q, diagnostics = %q, want neither", names, diags)
+	}
+}
