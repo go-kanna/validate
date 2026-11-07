@@ -15,6 +15,9 @@ import (
 // directiveKey spells the directive //kanna:validate.
 const directiveKey = validation.DirectiveKey
 
+// configKey spells the directive //kanna:config of kanna-config.
+const configKey = "config"
+
 // outputFile is the file generated in each package.
 const outputFile = validation.OutputFile
 
@@ -35,7 +38,8 @@ type target struct {
 // with the rest.
 //
 // A struct carrying validate tags without the directive is warned about: its
-// rules would never run, and nothing else would say so.
+// rules would never run, and nothing else would say so. One marked
+// //kanna:config is not: kanna-config checks them where it reads the struct.
 func targets(fset *token.FileSet, structs []scan.Struct) ([]target, []diag.Diag) {
 	var (
 		found []target
@@ -45,7 +49,7 @@ func targets(fset *token.FileSet, structs []scan.Struct) ([]target, []diag.Diag)
 		d, ds := directive.Find(fset, s.Doc, directiveKey)
 		diags = append(diags, ds...)
 		if !d.Found {
-			if hasValidateTag(s) {
+			if hasValidateTag(s) && !readByConfig(fset, s) {
 				diags = append(diags, diag.Warningf(s.Pos,
 					"%s has validate tags but no //kanna:%s, so they are never checked", s.Name, directiveKey))
 			}
@@ -137,4 +141,11 @@ func hasValidateTag(s scan.Struct) bool {
 		}
 	}
 	return false
+}
+
+// readByConfig reports whether s is marked //kanna:config, whose validate tags
+// kanna-config checks. kanna-config reports what is wrong with the mark.
+func readByConfig(fset *token.FileSet, s scan.Struct) bool {
+	d, _ := directive.Find(fset, s.Doc, configKey)
+	return d.Found
 }
