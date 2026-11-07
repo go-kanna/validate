@@ -14,6 +14,7 @@ import (
 	"github.com/go-kanna/internal/output"
 	"github.com/go-kanna/internal/packages"
 	"github.com/go-kanna/internal/scan"
+	"github.com/go-kanna/internal/validation"
 )
 
 // config holds what kanna-validate's own flags set.
@@ -104,7 +105,11 @@ func stopped(set packages.Set, roots map[string]bool, deferred, diags []diag.Dia
 func generate(set packages.Set, roots map[string]bool) ([]output.Change, []diag.Diag) {
 	pkgs := slices.DeleteFunc(slices.Clone(set.Packages), func(p *packages.Package) bool { return !roots[p.PkgPath] })
 	found, diags := targets(set.Fset, scan.Structs(pkgs))
-	diags = append(diags, hookPaths(set.Fset, pkgs, found)...)
+	for _, t := range found {
+		if t.hook != nil {
+			diags = append(diags, validation.HookPaths(set.Fset, pkgs, t.Struct, t.hook)...)
+		}
+	}
 	for _, pkg := range pkgs {
 		diags = append(diags, directive.Loose(directive.Lines(set.Fset, pkg.Syntax), directiveKey)...)
 	}

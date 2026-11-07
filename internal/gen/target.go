@@ -9,25 +9,17 @@ import (
 	"github.com/go-kanna/internal/diag"
 	"github.com/go-kanna/internal/directive"
 	"github.com/go-kanna/internal/scan"
+	"github.com/go-kanna/internal/validation"
 )
 
 // directiveKey spells the directive //kanna:validate.
-const directiveKey = "validate"
-
-// enumKey spells the directive //kanna:enum of kanna-value.
-const enumKey = "enum"
+const directiveKey = validation.DirectiveKey
 
 // outputFile is the file generated in each package.
-const outputFile = "validate_gen.go"
+const outputFile = validation.OutputFile
 
-// valueOutputFile is the file kanna-value generates in each package.
-const valueOutputFile = "value_gen.go"
-
-// valueGenerator names kanna-value in the header of that file.
-const valueGenerator = "kanna-value"
-
-// runtimePath is the import path of the package the generated code calls.
-const runtimePath = "github.com/go-kanna/validate"
+// generator names the tool in the header of the file it writes.
+const generator = validation.Generator
 
 // target is a struct marked //kanna:validate.
 type target struct {
@@ -61,7 +53,7 @@ func targets(fset *token.FileSet, structs []scan.Struct) ([]target, []diag.Diag)
 		}
 
 		ds = checkTarget(fset, s, d)
-		hook, hookDiags := hookOf(fset, s)
+		hook, hookDiags := validation.Hook(fset, s)
 		diags = append(append(diags, ds...), hookDiags...)
 		if len(ds) == 0 && len(hookDiags) == 0 {
 			found = append(found, target{Struct: s, hook: hook})
@@ -106,38 +98,6 @@ func checkTarget(fset *token.FileSet, s scan.Struct, d directive.Directive) []di
 	return diags
 }
 
-// hookOf returns the validate method s declares for the generated Validate to
-// call, or nil, and says why one by that name cannot be called.
-//
-// Only a method declared on s itself counts. One promoted from an embedded
-// struct belongs to that struct's own Validate, which the generated code calls
-// already.
-func hookOf(fset *token.FileSet, s scan.Struct) (*types.Func, []diag.Diag) {
-	for m := range s.Named.Methods() {
-		if m.Name() != "validate" {
-			continue
-		}
-		sig := m.Signature()
-		if sig.Params().Len() == 1 && sig.Results().Len() == 0 && isErrorsPointer(sig.Params().At(0).Type()) {
-			return m, nil
-		}
-		return nil, []diag.Diag{diag.Errorf(fset.Position(m.Pos()),
-			"%s.validate must be func(*validate.Errors) for the generated Validate to call it", s.Name).
-			WithHints("rename it if it is not meant to be called from Validate")}
-	}
-	return nil, nil
-}
-
-// isErrorsPointer reports whether t is *validate.Errors of the runtime.
-func isErrorsPointer(t types.Type) bool {
-	ptr, ok := t.(*types.Pointer)
-	if !ok {
-		return false
-	}
-	named, ok := types.Unalias(ptr.Elem()).(*types.Named)
-	return ok && named.Obj().Name() == "Errors" && named.Obj().Pkg() != nil && named.Obj().Pkg().Path() == runtimePath
-}
-
 // unnamedTags reports the validate tags of the structs without a name that a
 // field at path holds, through pointers, slices, arrays, and maps: no Validate
 // is generated for one, so nothing would check them.
@@ -156,7 +116,7 @@ func unnamedTags(fset *token.FileSet, path string, t types.Type) []diag.Diag {
 			var diags []diag.Diag
 			for i := range u.NumFields() {
 				v, at := u.Field(i), path+"."+u.Field(i).Name()
-				if _, ok, _ := lookup(reflect.StructTag(u.Tag(i))); ok {
+				if validation.HasTag(reflect.StructTag(u.Tag(i))) {
 					diags = append(diags, diag.Errorf(fset.Position(v.Pos()),
 						"%s has a validate tag, but a struct without a name gets no Validate, so it is never checked", at).
 						WithHints("declare the struct as a type of its own, marked //kanna:"+directiveKey))
@@ -172,7 +132,7 @@ func unnamedTags(fset *token.FileSet, path string, t types.Type) []diag.Diag {
 
 func hasValidateTag(s scan.Struct) bool {
 	for _, f := range s.Fields {
-		if _, ok, _ := lookup(f.Tag); ok {
+		if validation.HasTag(f.Tag) {
 			return true
 		}
 	}
