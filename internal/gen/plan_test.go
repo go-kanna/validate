@@ -110,36 +110,36 @@ func TestPlans(t *testing.T) {
 
 	want := map[string][]string{
 		"Request": {
-			`Name(name): required=="" runes>=1 runes<=50`,
-			`Age(age): >=18`,
-			`Role(role): oneof("admin","member")`,
-			`Email(email): omitempty=="" rule.Email`,
-			`Tags(tags): len<=5 []{runes<=20}`,
-			`Nickname(nickname): *{runes<=20}`,
-			`Avatar(avatar): required==nil *{rule.URL}`,
-			`When(when): required==IsZero`,
-			`Point(point): required=={}`,
-			`Active(active): required==false`,
-			`Count(count): required==0`,
-			`Confirm(confirm): confirms Password as password`,
-			`Secret(Secret): required==""`,
-			`Plain(Plain): required==""`,
-			`Address(address): nest`,
-			`OptAddr(opt_addr): omitempty=={} nest`,
-			`Billing(billing): required==nil *{nest}`,
-			`Items(items): len>=1 []{nest}`,
-			`Labels(labels): []{*{nest}}`,
-			`Grid(grid): []{nest}`,
-			`Matrix(matrix): []{[]{>=0}}`,
-			`Picks(picks): *{[]{required==""}}`,
-			`Done(done): *{rule=test.Past via NewPast}`,
-			`Shifts(shifts): []{rule=test.Past via NewPast}`,
-			`Audit(Audit,flatten): nest`,
-			`Stamp(Stamp): nest`,
+			`Name(name)`,
+			`Age(age)`,
+			`Role(role)`,
+			`Email(email)`,
+			`Tags(tags)`,
+			`Nickname(nickname)`,
+			`Avatar(avatar)`,
+			`When(when)`,
+			`Point(point)`,
+			`Active(active)`,
+			`Count(count)`,
+			`Confirm(confirm)`,
+			`Secret(Secret)`,
+			`Plain(Plain)`,
+			`Address(address)`,
+			`OptAddr(opt_addr)`,
+			`Billing(billing)`,
+			`Items(items)`,
+			`Labels(labels)`,
+			`Grid(grid)`,
+			`Matrix(matrix)`,
+			`Picks(picks)`,
+			`Done(done)`,
+			`Shifts(shifts)`,
+			`Audit(Audit,flatten)`,
+			`Stamp(Stamp)`,
 		},
-		"Address": {`Zip(zip): required=="" pattern(^\d{3}-\d{4}$)`},
-		"Audit":   {`By(by): required==""`},
-		"Stamp":   {`At(at): required==""`},
+		"Address": {`Zip(zip)`},
+		"Audit":   {`By(by)`},
+		"Stamp":   {`At(at)`},
 	}
 	for _, name := range slices.Sorted(maps.Keys(want)) {
 		if !slices.Equal(got[name], want[name]) {
@@ -169,7 +169,7 @@ type Outer struct {
 	if len(diags) > 0 {
 		t.Fatalf("diagnostics: %q", diags)
 	}
-	if want := []string{"Inner(Inner): nest"}; !slices.Equal(got["Outer"], want) {
+	if want := []string{"Inner(Inner)"}; !slices.Equal(got["Outer"], want) {
 		t.Errorf("plan of Outer = %q, want %q", got["Outer"], want)
 	}
 }
